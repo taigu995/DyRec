@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { MobileFrame } from '@/components/live/mobile-frame';
+
 import { StreamPlayer } from '@/components/live/stream-player';
 import { DanmakuOverlay } from '@/components/live/danmaku-overlay';
 import { GiftEffect } from '@/components/live/gift-effect';
@@ -264,10 +264,10 @@ export default function LivePreviewPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* 左侧: 手机预览 */}
         <div className="flex flex-1 items-center justify-center overflow-auto bg-zinc-950/50 p-6">
-          <MobileFrame
-            nickname={room?.nickname || room?.name}
-            viewerCount={room?.viewerCount || 0}
-            isLive={room?.status === 'live'}
+          {/* 手机视角预览 (9:16 无外框) */}
+          <div
+            className="relative overflow-hidden rounded-lg border border-zinc-800 bg-black shadow-2xl shadow-cyan-500/5"
+            style={{ aspectRatio: '9/16', height: 'min(80vh, 800px)' }}
           >
             {/* 直播流播放器 */}
             <StreamPlayer
@@ -287,7 +287,7 @@ export default function LivePreviewPage() {
               messages={giftMessages}
               visible={showGifts}
             />
-          </MobileFrame>
+          </div>
         </div>
 
         {/* 右侧: 控制面板 */}
