@@ -67,13 +67,13 @@ export default function LivePreviewPage() {
     setRecordedFilename(filename);
     
     // 检查是否需要自动转换
-    if (room?.autoConvert && room.convertFormat) {
-      convertVideo(blob, filename, room.convertFormat);
+    if (room?.convertSettings?.compositeAutoConvert && room.convertSettings.convertFormat) {
+      convertVideo(blob, filename, room.convertSettings.convertFormat, room.convertSettings.deleteSourceAfterConvert);
     } else {
       // 默认下载
       downloadBlob(blob, filename);
     }
-  }, [room?.autoConvert, room?.convertFormat]);
+  }, [room?.convertSettings]);
 
   // Canvas 录制 hook (录制包含弹幕+礼物的画面)
   const canvasRecorder = useCanvasRecorder({
@@ -109,7 +109,7 @@ export default function LivePreviewPage() {
   };
 
   // 转换视频格式
-  const convertVideo = async (blob: Blob, filename: string, format: string) => {
+  const convertVideo = async (blob: Blob, filename: string, format: string, deleteSource: boolean = true) => {
     setIsConverting(true);
     setConvertStatus('正在上传视频...');
     
@@ -137,7 +137,7 @@ export default function LivePreviewPage() {
         body: JSON.stringify({
           inputPath: uploadData.data.path,
           format,
-          deleteOriginal: true,
+          deleteOriginal: deleteSource,
         }),
       });
       
@@ -168,8 +168,13 @@ export default function LivePreviewPage() {
 
   // 手动转换已录制的视频
   const handleManualConvert = async () => {
-    if (!recordedBlob || !room?.convertFormat) return;
-    await convertVideo(recordedBlob, recordedFilename, room.convertFormat);
+    if (!recordedBlob || !room?.convertSettings?.convertFormat) return;
+    await convertVideo(
+      recordedBlob,
+      recordedFilename,
+      room.convertSettings.convertFormat,
+      room.convertSettings.deleteSourceAfterConvert
+    );
   };
 
   // 手动下载已录制的视频

@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { LiveRoom, RecordingMode } from '@/lib/types';
+import type { LiveRoom, RecordingMode, VideoFormat } from '@/lib/types';
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
@@ -41,6 +41,10 @@ export default function RoomsPage() {
   const [newUrl, setNewUrl] = useState('');
   const [newQuality, setNewQuality] = useState<string>('origin');
   const [newRecordMode, setNewRecordMode] = useState<RecordingMode>('original');
+  const [newCompositeAutoConvert, setNewCompositeAutoConvert] = useState(false);
+  const [newOriginalAutoConvert, setNewOriginalAutoConvert] = useState(false);
+  const [newConvertFormat, setNewConvertFormat] = useState<VideoFormat>('mp4');
+  const [newDeleteSource, setNewDeleteSource] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,8 +54,10 @@ export default function RoomsPage() {
   const [editRecordMode, setEditRecordMode] = useState<RecordingMode>('original');
   const [editQuality, setEditQuality] = useState<string>('origin');
   const [editAutoRecord, setEditAutoRecord] = useState(false);
-  const [editAutoConvert, setEditAutoConvert] = useState(false);
-  const [editConvertFormat, setEditConvertFormat] = useState<'mp4' | 'mkv' | 'flv'>('mp4');
+  const [editCompositeAutoConvert, setEditCompositeAutoConvert] = useState(false);
+  const [editOriginalAutoConvert, setEditOriginalAutoConvert] = useState(false);
+  const [editConvertFormat, setEditConvertFormat] = useState<VideoFormat>('mp4');
+  const [editDeleteSource, setEditDeleteSource] = useState(true);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -82,7 +88,17 @@ export default function RoomsPage() {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newUrl, quality: newQuality, recordMode: newRecordMode }),
+        body: JSON.stringify({
+          url: newUrl,
+          quality: newQuality,
+          recordMode: newRecordMode,
+          convertSettings: {
+            compositeAutoConvert: newCompositeAutoConvert,
+            originalAutoConvert: newOriginalAutoConvert,
+            convertFormat: newConvertFormat,
+            deleteSourceAfterConvert: newDeleteSource,
+          },
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -91,6 +107,10 @@ export default function RoomsPage() {
         setNewUrl('');
         setNewQuality('origin');
         setNewRecordMode('original');
+        setNewCompositeAutoConvert(false);
+        setNewOriginalAutoConvert(false);
+        setNewConvertFormat('mp4');
+        setNewDeleteSource(true);
       } else {
         setError(data.error || '添加失败');
       }
@@ -173,8 +193,10 @@ export default function RoomsPage() {
     setEditRecordMode(room.recordMode || 'original');
     setEditQuality(room.quality || 'origin');
     setEditAutoRecord(room.autoRecord || false);
-    setEditAutoConvert(room.autoConvert || false);
-    setEditConvertFormat((room.convertFormat as 'mp4' | 'mkv' | 'flv') || 'mp4');
+    setEditCompositeAutoConvert(room.convertSettings?.compositeAutoConvert || false);
+    setEditOriginalAutoConvert(room.convertSettings?.originalAutoConvert || false);
+    setEditConvertFormat(room.convertSettings?.convertFormat || 'mp4');
+    setEditDeleteSource(room.convertSettings?.deleteSourceAfterConvert ?? true);
     setEditDialogOpen(true);
   };
 
@@ -190,8 +212,12 @@ export default function RoomsPage() {
             recordMode: editRecordMode,
             quality: editQuality,
             autoRecord: editAutoRecord,
-            autoConvert: editAutoConvert,
-            convertFormat: editConvertFormat,
+            convertSettings: {
+              compositeAutoConvert: editCompositeAutoConvert,
+              originalAutoConvert: editOriginalAutoConvert,
+              convertFormat: editConvertFormat,
+              deleteSourceAfterConvert: editDeleteSource,
+            },
           },
         }),
       });
@@ -380,6 +406,58 @@ export default function RoomsPage() {
                     {newRecordMode === 'composite' && '录制画面+弹幕滚动+礼物特效，如不满足条件自动切换为原始流录制'}
                     {newRecordMode === 'both' && '同时录制原始流和合成视频，生成两个文件'}
                   </p>
+                </div>
+                <div className="space-y-3 rounded-lg border border-zinc-800 p-3">
+                  <p className="text-sm font-medium text-zinc-300">录制结束自动转换</p>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={newCompositeAutoConvert}
+                        onChange={(e) => setNewCompositeAutoConvert(e.target.checked)}
+                        className="rounded border-zinc-700 bg-zinc-800"
+                      />
+                      合成录制自动转换
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={newOriginalAutoConvert}
+                        onChange={(e) => setNewOriginalAutoConvert(e.target.checked)}
+                        className="rounded border-zinc-700 bg-zinc-800"
+                      />
+                      原始流录制自动转换
+                    </label>
+                  </div>
+                  {(newCompositeAutoConvert || newOriginalAutoConvert) && (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-500">转换格式</label>
+                        <Select
+                          value={newConvertFormat}
+                          onValueChange={(v) => setNewConvertFormat(v as VideoFormat)}
+                        >
+                          <SelectTrigger className="h-8 border-zinc-700 bg-zinc-800 text-zinc-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-zinc-700 bg-zinc-900">
+                            <SelectItem value="mp4">MP4 (推荐)</SelectItem>
+                            <SelectItem value="mkv">MKV</SelectItem>
+                            <SelectItem value="flv">FLV</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-zinc-400">
+                        <input
+                          type="checkbox"
+                          checked={newDeleteSource}
+                          onChange={(e) => setNewDeleteSource(e.target.checked)}
+                          className="rounded border-zinc-700 bg-zinc-800"
+                        />
+                        转换后删除源文件
+                      </label>
+                    </>
+                  )}
                 </div>
                 {error && (
                   <p className="text-sm text-red-400">{error}</p>
@@ -617,45 +695,58 @@ export default function RoomsPage() {
                 {editAutoRecord ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
               </Button>
             </div>
-            {(editRecordMode === 'composite' || editRecordMode === 'both') && (
-              <>
-                <div className="flex items-center justify-between rounded-lg border border-zinc-700 p-3">
-                  <div>
-                    <p className="text-sm text-zinc-200">自动转换格式</p>
-                    <p className="text-xs text-zinc-500">合成录制完成后自动转换格式</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditAutoConvert(!editAutoConvert)}
-                    className={editAutoConvert ? 'text-cyan-400' : 'text-zinc-500'}
-                  >
-                    {editAutoConvert ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
-                  </Button>
-                </div>
-                {editAutoConvert && (
-                  <div className="space-y-2">
-                    <label className="text-sm text-zinc-400">转换目标格式</label>
+            <div className="space-y-3 rounded-lg border border-zinc-800 p-3">
+              <p className="text-sm font-medium text-zinc-300">录制结束自动转换</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={editCompositeAutoConvert}
+                    onChange={(e) => setEditCompositeAutoConvert(e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-800"
+                  />
+                  合成录制自动转换
+                </label>
+                <label className="flex items-center gap-2 text-sm text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={editOriginalAutoConvert}
+                    onChange={(e) => setEditOriginalAutoConvert(e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-800"
+                  />
+                  原始流录制自动转换
+                </label>
+              </div>
+              {(editCompositeAutoConvert || editOriginalAutoConvert) && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-500">转换格式</label>
                     <Select
                       value={editConvertFormat}
-                      onValueChange={(v) => setEditConvertFormat(v as 'mp4' | 'mkv' | 'flv')}
+                      onValueChange={(v) => setEditConvertFormat(v as VideoFormat)}
                     >
-                      <SelectTrigger className="border-zinc-700 bg-zinc-800 text-zinc-100">
+                      <SelectTrigger className="h-8 border-zinc-700 bg-zinc-800 text-zinc-200">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-800">
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
                         <SelectItem value="mp4">MP4 (推荐)</SelectItem>
                         <SelectItem value="mkv">MKV</SelectItem>
                         <SelectItem value="flv">FLV</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-zinc-500">
-                      转换需要 FFmpeg，转换完成后原 WebM 文件将被删除
-                    </p>
                   </div>
-                )}
-              </>
-            )}
+                  <label className="flex items-center gap-2 text-sm text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={editDeleteSource}
+                      onChange={(e) => setEditDeleteSource(e.target.checked)}
+                      className="rounded border-zinc-700 bg-zinc-800"
+                    />
+                    转换后删除源文件
+                  </label>
+                </>
+              )}
+            </div>
             <Button
               className="w-full bg-cyan-600 hover:bg-cyan-700"
               onClick={saveRoomSettings}
