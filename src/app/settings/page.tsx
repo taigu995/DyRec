@@ -11,6 +11,7 @@ import {
   Timer,
   Shield,
   Settings as SettingsIcon,
+  Power,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,10 +39,68 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [isDirty, setIsDirty] = useState(false);
+  const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
+  const [autoStartLoading, setAutoStartLoading] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchAutoStartStatus();
   }, []);
+
+  const fetchAutoStartStatus = async () => {
+    // 检查是否为 Electron 环境
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.autoStart) {
+      setIsElectron(true);
+      try {
+        const result = await (window as any).electronAPI.autoStart.get();
+        if (result.success) {
+          setAutoStartEnabled(result.data.enabled);
+        }
+      } catch (err) {
+        console.error('获取自启动状态失败:', err);
+      }
+    } else {
+      // Web 环境：通过 API 获取状态
+      try {
+        const res = await fetch('/api/autostart');
+        const data = await res.json();
+        if (data.success) {
+          setAutoStartEnabled(data.data.enabled);
+        }
+      } catch (err) {
+        console.error('获取自启动状态失败:', err);
+      }
+    }
+  };
+
+  const toggleAutoStart = async (enabled: boolean) => {
+    setAutoStartLoading(true);
+    try {
+      if (typeof window !== 'undefined' && (window as any).electronAPI?.autoStart) {
+        // Electron 环境
+        const result = await (window as any).electronAPI.autoStart.set(enabled);
+        if (result.success) {
+          setAutoStartEnabled(enabled);
+        }
+      } else {
+        // Web 环境：通过 API
+        const res = await fetch('/api/autostart', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setAutoStartEnabled(enabled);
+        }
+      }
+    } catch (err) {
+      console.error('设置自启动失败:', err);
+    } finally {
+      setAutoStartLoading(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -210,6 +269,43 @@ export default function SettingsPage() {
               默认为 ffmpeg，确保已安装并添加到系统 PATH 中
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Auto Start */}
+      <Card className="border-zinc-800 bg-zinc-900/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+            <Power className="h-4 w-4 text-cyan-400" />
+            开机自启动
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-zinc-300">开机时自动启动 DyRec</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {isElectron
+                  ? '启用后程序将在系统启动时自动运行（最小化到托盘）'
+                  : 'Web 环境不支持自动设置，请手动将快捷方式添加到启动文件夹'}
+              </p>
+            </div>
+            <Switch
+              checked={autoStartEnabled}
+              onCheckedChange={toggleAutoStart}
+              disabled={autoStartLoading}
+            />
+          </div>
+          {!isElectron && (
+            <div className="rounded-md bg-zinc-800/50 p-3 space-y-1.5">
+              <p className="text-xs font-medium text-zinc-400">手动设置步骤：</p>
+              <ol className="text-xs text-zinc-500 space-y-1 list-decimal list-inside">
+                <li>按 <kbd className="px-1 py-0.5 bg-zinc-700 rounded text-zinc-300">Win + R</kbd> 打开运行</li>
+                <li>输入 <code className="px-1 py-0.5 bg-zinc-700 rounded text-zinc-300 font-mono">shell:startup</code> 回车</li>
+                <li>将 DyRec 快捷方式复制到打开的文件夹</li>
+              </ol>
+            </div>
+          )}
         </CardContent>
       </Card>
 
