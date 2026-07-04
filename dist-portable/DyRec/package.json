@@ -6,18 +6,8 @@
   "main": "electron/main.js",
   "author": "DyRec",
   "scripts": {
-    "build": "bash ./scripts/build.sh",
-    "dev": "bash ./scripts/dev.sh",
-    "preinstall": "npx only-allow pnpm",
-    "lint": "eslint",
-    "lint:build": "eslint . --quiet",
-    "start": "bash ./scripts/start.sh",
-    "ts-check": "tsc -p tsconfig.json",
-    "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'",
-    "electron:dev": "concurrently \"pnpm dev\" \"wait-on http://localhost:5000 && electron .\"",
-    "electron:build": "pnpm build && electron-builder --win --x64",
-    "electron:build:dir": "pnpm build && electron-builder --win --x64 --dir",
-    "electron:start": "pnpm build && electron ."
+    "start": "node server.js",
+    "electron:start": "electron ."
   },
   "build": {
     "appId": "com.dyrec.app",
