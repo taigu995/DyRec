@@ -31,6 +31,14 @@ if %errorlevel% neq 0 (
 
 echo.
 echo --------------------------------------------
+echo   Installing dependencies...
+echo --------------------------------------------
+echo.
+
+call npm install --production --no-audit --no-fund --loglevel=error
+
+echo.
+echo --------------------------------------------
 echo   Starting DyRec server...
 echo --------------------------------------------
 echo.
@@ -45,9 +53,6 @@ node server.js
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Server failed to start
-    echo.
-    echo If you see module not found errors, run:
-    echo   npm install
     echo.
     pause
 )
