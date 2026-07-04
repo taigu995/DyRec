@@ -2,6 +2,9 @@
 // 抖音直播录制工具 - 类型定义
 // ============================================================
 
+/** 录制模式 */
+export type RecordingMode = 'composite' | 'original' | 'both';
+
 /** 直播间信息 */
 export interface LiveRoom {
   id: string;
@@ -15,6 +18,8 @@ export interface LiveRoom {
   autoRecord: boolean;
   /** 画质偏好 */
   quality: 'origin' | 'uhd' | 'hd' | 'sd';
+  /** 录制模式: composite=合成录制, original=原始流录制, both=两者同步 */
+  recordMode: RecordingMode;
   /** 添加时间 */
   createdAt: number;
   /** 最后检测时间 */
@@ -47,7 +52,7 @@ export interface RecordingTask {
   /** 输出文件路径 */
   outputPath: string;
   /** 输出格式 */
-  format: 'ts' | 'flv' | 'mkv' | 'mp4';
+  format: 'ts' | 'flv' | 'mkv' | 'mp4' | 'webm';
   /** 画质 */
   quality: string;
   /** 错误信息 */
@@ -64,6 +69,8 @@ export interface RecordingTask {
   autoRestart?: boolean;
   /** 是否正在停止中（内部使用） */
   stopping?: boolean;
+  /** 录制模式 */
+  recordMode?: RecordingMode;
 }
 
 /** 录制历史 */

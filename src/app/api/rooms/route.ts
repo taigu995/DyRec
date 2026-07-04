@@ -72,6 +72,7 @@ export async function POST(
       status: roomInfo.isLive ? 'live' : 'offline',
       autoRecord: true,
       quality: (quality as LiveRoom['quality']) || 'origin',
+      recordMode: (body.recordMode as LiveRoom['recordMode']) || 'original',
       createdAt: Date.now(),
       lastCheckedAt: Date.now(),
       title: roomInfo.title,

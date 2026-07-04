@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { LiveRoom } from '@/lib/types';
+import type { LiveRoom, RecordingMode } from '@/lib/types';
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
@@ -40,6 +40,7 @@ export default function RoomsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newUrl, setNewUrl] = useState('');
   const [newQuality, setNewQuality] = useState<string>('origin');
+  const [newRecordMode, setNewRecordMode] = useState<RecordingMode>('original');
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,7 +73,7 @@ export default function RoomsPage() {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newUrl, quality: newQuality }),
+        body: JSON.stringify({ url: newUrl, quality: newQuality, recordMode: newRecordMode }),
       });
       const data = await res.json();
       if (data.success) {
@@ -80,6 +81,7 @@ export default function RoomsPage() {
         setDialogOpen(false);
         setNewUrl('');
         setNewQuality('origin');
+        setNewRecordMode('original');
       } else {
         setError(data.error || '添加失败');
       }
@@ -187,6 +189,38 @@ export default function RoomsPage() {
     }
   };
 
+  const getRecordModeBadge = (mode?: RecordingMode) => {
+    switch (mode) {
+      case 'composite':
+        return (
+          <Badge
+            variant="outline"
+            className="border-purple-800/50 text-[10px] text-purple-400"
+          >
+            合成录制
+          </Badge>
+        );
+      case 'both':
+        return (
+          <Badge
+            variant="outline"
+            className="border-amber-800/50 text-[10px] text-amber-400"
+          >
+            同步录制
+          </Badge>
+        );
+      default:
+        return (
+          <Badge
+            variant="outline"
+            className="border-zinc-700 text-[10px] text-zinc-500"
+          >
+            原始流
+          </Badge>
+        );
+    }
+  };
+
   const getQualityLabel = (quality: string) => {
     const labels: Record<string, string> = {
       origin: '原画',
@@ -277,6 +311,27 @@ export default function RoomsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-zinc-400">录制模式</label>
+                  <Select
+                    value={newRecordMode}
+                    onValueChange={(v) => setNewRecordMode(v as RecordingMode)}
+                  >
+                    <SelectTrigger className="border-zinc-700 bg-zinc-800 text-zinc-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-zinc-700 bg-zinc-900">
+                      <SelectItem value="original">原始流录制</SelectItem>
+                      <SelectItem value="composite">合成录制 (画面+弹幕+礼物)</SelectItem>
+                      <SelectItem value="both">两者同步录制</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-zinc-600">
+                    {newRecordMode === 'original' && '直接录制直播流，画质最高，不含弹幕礼物'}
+                    {newRecordMode === 'composite' && '录制画面+弹幕滚动+礼物特效，如不满足条件自动切换为原始流录制'}
+                    {newRecordMode === 'both' && '同时录制原始流和合成视频，生成两个文件'}
+                  </p>
+                </div>
                 {error && (
                   <p className="text-sm text-red-400">{error}</p>
                 )}
@@ -350,6 +405,7 @@ export default function RoomsPage() {
                         {room.nickname || room.name}
                       </span>
                       {getStatusBadge(room.status)}
+                      {getRecordModeBadge(room.recordMode)}
                       {room.autoRecord && (
                         <Badge
                           variant="outline"

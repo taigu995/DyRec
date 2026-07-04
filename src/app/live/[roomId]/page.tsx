@@ -137,7 +137,38 @@ export default function LivePreviewPage() {
     }
   }, [messages]);
 
-  const startRecording = async () => {
+  // 根据录制模式启动录制
+  const startRecordingByMode = async () => {
+    if (!room) return;
+
+    const recordMode = room.recordMode || 'original';
+
+    if (recordMode === 'composite') {
+      // 合成录制模式：启动 Canvas 录制
+      // 检查是否满足合成录制条件（视频元素存在、弹幕连接正常）
+      if (!videoRef.current || !videoRef.current.srcObject) {
+        // 不满足条件，自动切换到原始流录制
+        alert('合成录制条件不满足（视频流未加载），自动切换为原始流录制');
+        await startOriginalRecording();
+        return;
+      }
+      startCanvasRecording();
+    } else if (recordMode === 'both') {
+      // 两者同步模式：同时启动原始流录制和合成录制
+      await startOriginalRecording();
+      // 延迟启动合成录制，确保原始流录制已启动
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.srcObject) {
+          startCanvasRecording();
+        }
+      }, 1000);
+    } else {
+      // 原始流录制模式
+      await startOriginalRecording();
+    }
+  };
+
+  const startOriginalRecording = async () => {
     try {
       const res = await fetch('/api/record', {
         method: 'POST',
@@ -155,6 +186,10 @@ export default function LivePreviewPage() {
     }
   };
 
+  const startRecording = async () => {
+    await startRecordingByMode();
+  };
+
   const stopRecording = async () => {
     try {
       await fetch('/api/record', {
@@ -163,6 +198,10 @@ export default function LivePreviewPage() {
         body: JSON.stringify({ roomId }),
       });
       setIsRecording(false);
+      // 同时停止 Canvas 录制
+      if (isCanvasRecording) {
+        stopCanvasRecording();
+      }
     } catch {
       // ignore
     }

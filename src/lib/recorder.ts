@@ -268,12 +268,13 @@ export async function checkFFmpeg(
 /**
  * 生成输出文件路径
  * 格式: [主播名称][年-月-日-时-分-秒].扩展名
- * 存储路径: outputDir/主播名称/
+ * 存储路径: outputDir/主播名称/录制模式文件夹/
  */
 export function generateOutputPath(
   outputDir: string,
   roomName: string,
-  format: string
+  format: string,
+  recordMode?: 'composite' | 'original' | 'both'
 ): string {
   const now = new Date();
   // 格式化为 年-月-日-时-分-秒
@@ -291,6 +292,37 @@ export function generateOutputPath(
   // 文件名格式: [主播名称][年-月-日-时-分-秒].扩展名
   const filename = `[${safeRoomName}][${dateStr}].${format}`;
 
-  // 存储路径: outputDir/主播名称/
-  return path.join(outputDir, safeRoomName, filename);
+  // 根据录制模式确定子文件夹
+  let subFolder = '原始流录制';
+  if (recordMode === 'composite') {
+    subFolder = '合成录制';
+  } else if (recordMode === 'both') {
+    subFolder = '原始流录制'; // both 模式下原始流放在原始流录制文件夹
+  }
+
+  // 存储路径: outputDir/主播名称/录制模式文件夹/
+  return path.join(outputDir, safeRoomName, subFolder, filename);
+}
+
+/**
+ * 生成合成录制输出文件路径
+ * 存储路径: outputDir/主播名称/合成录制/
+ */
+export function generateCompositeOutputPath(
+  outputDir: string,
+  roomName: string
+): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}-${hours}-${minutes}-${seconds}`;
+
+  const safeRoomName = roomName.replace(/[<>:"/\\|?*]/g, '_');
+  const filename = `[${safeRoomName}][${dateStr}].webm`;
+
+  return path.join(outputDir, safeRoomName, '合成录制', filename);
 }
