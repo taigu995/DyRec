@@ -10,6 +10,7 @@ import {
   Settings,
   Monitor,
   Eye,
+  ShieldCheck,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { href: '/rooms', label: '直播间', icon: Radio },
   { href: '/recordings', label: '录制管理', icon: CircleDot },
   { href: '/live', label: '直播预览', icon: Eye },
+  { href: '/setup', label: '环境检测', icon: ShieldCheck },
   { href: '/settings', label: '设置', icon: Settings },
 ];
 

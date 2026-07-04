@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
@@ -186,6 +186,63 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// ========== IPC Handlers ==========
+
+// 窗口操作
+ipcMain.on('window-minimize', () => mainWindow?.minimize());
+ipcMain.on('window-maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow?.maximize();
+  }
+});
+ipcMain.on('window-close', () => mainWindow?.close());
+
+// 获取版本
+ipcMain.handle('get-version', () => app.getVersion());
+
+// 依赖检测
+const depChecker = require('./modules/dependency-checker');
+
+ipcMain.handle('deps:check-all', async () => {
+  try {
+    const results = await depChecker.checkAll();
+    return { success: true, data: results };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deps:check-ffmpeg', () => {
+  try {
+    return { success: true, data: depChecker.checkFFmpeg() };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deps:install-ffmpeg', async () => {
+  try {
+    // 通过 webContents 发送进度
+    const sendProgress = (progress) => {
+      mainWindow?.webContents.send('deps:install-progress', progress);
+    };
+    const result = await depChecker.installFFmpeg(sendProgress);
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deps:get-ffmpeg-path', () => {
+  return { success: true, data: depChecker.getFFmpegPath() };
+});
+
+ipcMain.handle('deps:get-deps-dir', () => {
+  return { success: true, data: depChecker.getDepsDir() };
+});
 
 // 应用就绪
 app.whenReady().then(async () => {

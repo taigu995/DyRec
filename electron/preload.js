@@ -5,15 +5,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 获取应用版本
   getVersion: () => ipcRenderer.invoke('get-version'),
   
-  // 最小化窗口
+  // 窗口操作
   minimize: () => ipcRenderer.send('window-minimize'),
-  
-  // 最大化窗口
   maximize: () => ipcRenderer.send('window-maximize'),
-  
-  // 关闭窗口
   close: () => ipcRenderer.send('window-close'),
   
+  // 依赖检测与安装
+  deps: {
+    checkAll: () => ipcRenderer.invoke('deps:check-all'),
+    checkFFmpeg: () => ipcRenderer.invoke('deps:check-ffmpeg'),
+    installFFmpeg: () => ipcRenderer.invoke('deps:install-ffmpeg'),
+    getFFmpegPath: () => ipcRenderer.invoke('deps:get-ffmpeg-path'),
+    getDepsDir: () => ipcRenderer.invoke('deps:get-deps-dir'),
+    onInstallProgress: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('deps:install-progress', handler);
+      return () => ipcRenderer.removeListener('deps:install-progress', handler);
+    },
+  },
+
   // 是否为 Electron 环境
   isElectron: true,
 });

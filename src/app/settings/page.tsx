@@ -10,6 +10,7 @@ import {
   Terminal,
   Timer,
   Shield,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -181,11 +182,19 @@ export default function SettingsPage() {
                 {settings.ffmpegAvailable ? '已检测到 FFmpeg' : 'FFmpeg 不可用'}
               </span>
             </div>
-            {settings.ffmpegVersion && (
-              <span className="font-mono text-xs text-zinc-500">
-                v{settings.ffmpegVersion}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {settings.ffmpegVersion && (
+                <span className="font-mono text-xs text-zinc-500">
+                  v{settings.ffmpegVersion}
+                </span>
+              )}
+              <a href="/setup">
+                <Button variant="outline" size="sm" className="text-xs border-zinc-700 text-zinc-400 hover:text-zinc-200">
+                  <SettingsIcon className="w-3 h-3 mr-1" />
+                  一键检测
+                </Button>
+              </a>
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-xs text-zinc-500">
