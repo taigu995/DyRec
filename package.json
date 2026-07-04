@@ -1,7 +1,10 @@
 {
-  "name": "projects",
-  "version": "0.1.0",
+  "name": "dyrec",
+  "version": "1.0.0",
+  "description": "抖音直播自动录制管理工具",
   "private": true,
+  "main": "electron/main.js",
+  "author": "DyRec",
   "scripts": {
     "build": "bash ./scripts/build.sh",
     "dev": "bash ./scripts/dev.sh",
@@ -10,7 +13,67 @@
     "lint:build": "eslint . --quiet",
     "start": "bash ./scripts/start.sh",
     "ts-check": "tsc -p tsconfig.json",
-    "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'"
+    "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'",
+    "electron:dev": "concurrently \"pnpm dev\" \"wait-on http://localhost:5000 && electron .\"",
+    "electron:build": "pnpm build && electron-builder --win --x64",
+    "electron:build:dir": "pnpm build && electron-builder --win --x64 --dir",
+    "electron:start": "pnpm build && electron ."
+  },
+  "build": {
+    "appId": "com.dyrec.app",
+    "productName": "DyRec",
+    "copyright": "Copyright © 2026 DyRec",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "electron/resources"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "next.config.ts",
+      "public/**/*",
+      "scripts/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next",
+        "to": "app/.next"
+      },
+      {
+        "from": "public",
+        "to": "app/public"
+      },
+      {
+        "from": "node_modules",
+        "to": "app/node_modules"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/resources/icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DyRec",
+      "installerIcon": "electron/resources/icon.ico",
+      "uninstallerIcon": "electron/resources/icon.ico",
+      "installerHeaderIcon": "electron/resources/icon.ico"
+    },
+    "asar": false
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
@@ -73,6 +136,8 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@electron/packager": "^20.0.2",
+    "@electron/rebuild": "^4.1.0",
     "@react-dev-inspector/babel-plugin": "^2.0.1",
     "@react-dev-inspector/middleware": "^2.0.1",
     "@tailwindcss/postcss": "^4",
@@ -81,6 +146,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.3",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "only-allow": "^1.2.2",
@@ -89,7 +157,8 @@
     "tailwindcss": "^4",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.10"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
