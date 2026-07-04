@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-setlocal enabledelayedexpansion
+setlocal
 
 REM Create logs directory
 if not exist "logs" mkdir logs
@@ -27,7 +27,7 @@ REM Check Node.js
 echo [INFO] Checking Node.js...
 echo [%date% %time%] Checking Node.js... >> "%LOG_FILE%"
 where node >nul 2>nul
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo [ERROR] Node.js not found! >> "%LOG_FILE%"
     echo [ERROR] Node.js not found!
     echo Please install Node.js 20+ from https://nodejs.org/zh-cn
@@ -41,23 +41,35 @@ echo [OK] Node.js found: %NODE_VERSION%
 echo [OK] Node.js found: %NODE_VERSION% >> "%LOG_FILE%"
 echo. >> "%LOG_FILE%"
 
-REM Check FFmpeg
+REM Check FFmpeg (just check file existence, don't run it)
 echo [INFO] Checking FFmpeg...
 echo [%date% %time%] Checking FFmpeg... >> "%LOG_FILE%"
-where ffmpeg >nul 2>nul
-if %errorlevel% neq 0 (
-    if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
-        echo [OK] FFmpeg found in .deps folder
-        echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
-        set PATH=%PATH%;%CD%\.deps\ffmpeg\bin
-    ) else (
-        echo [WARN] FFmpeg not found - will auto-download
-        echo [WARN] FFmpeg not found - will auto-download >> "%LOG_FILE%"
-        echo        You can also install FFmpeg from /setup page
+set FFMPEG_FOUND=0
+
+REM Check if ffmpeg is in .deps folder
+if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
+    set FFMPEG_FOUND=1
+    echo [OK] FFmpeg found in .deps folder
+    echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
+    set "PATH=%PATH%;%CD%\.deps\ffmpeg\bin"
+    goto :ffmpeg_done
+)
+
+REM Check if ffmpeg is in PATH (just check if file exists, not running)
+for %%p in (ffmpeg.exe) do (
+    if not "%%~$PATH:p"=="" (
+        set FFMPEG_FOUND=1
+        echo [OK] FFmpeg found in PATH
+        echo [OK] FFmpeg found in PATH >> "%LOG_FILE%"
+        goto :ffmpeg_done
     )
-) else (
-    echo [OK] FFmpeg found
-    echo [OK] FFmpeg found >> "%LOG_FILE%"
+)
+
+:ffmpeg_done
+if "%FFMPEG_FOUND%"=="0" (
+    echo [WARN] FFmpeg not found - recording disabled
+    echo [WARN] FFmpeg not found - recording disabled >> "%LOG_FILE%"
+    echo        You can install FFmpeg from /setup page
 )
 echo. >> "%LOG_FILE%"
 
@@ -81,7 +93,7 @@ echo [INFO] Running: npm install --production --legacy-peer-deps
 echo [INFO] Running: npm install --production --legacy-peer-deps >> "%LOG_FILE%"
 call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund >> "%LOG_FILE%" 2>&1
 
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo [ERROR] npm install failed with error code: %errorlevel%
     echo [ERROR] npm install failed with error code: %errorlevel% >> "%LOG_FILE%"
     echo Please check the log file for details: %LOG_FILE%
