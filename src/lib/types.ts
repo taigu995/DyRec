@@ -45,6 +45,10 @@ export interface LiveRoom {
   title: string;
   /** 主播昵称 */
   nickname: string;
+  /** 主播唯一ID（用于检测改名） */
+  secUid?: string;
+  /** 是否使用 Cookie 录制 */
+  useCookieForRecord?: boolean;
   /** 在线人数 */
   viewerCount: number;
   /** 封面图 */

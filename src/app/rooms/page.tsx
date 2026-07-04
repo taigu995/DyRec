@@ -12,6 +12,8 @@ import {
   Play,
   Loader2,
   Eye,
+  Globe,
+  Cookie,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +35,15 @@ import {
 } from '@/components/ui/select';
 import type { LiveRoom, RecordingMode, VideoFormat } from '@/lib/types';
 
+/** 预览的房间信息 */
+interface PreviewRoomInfo {
+  roomId: string;
+  nickname: string;
+  title: string;
+  avatar: string;
+  isLive: boolean;
+}
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,8 +56,12 @@ export default function RoomsPage() {
   const [newOriginalAutoConvert, setNewOriginalAutoConvert] = useState(false);
   const [newConvertFormat, setNewConvertFormat] = useState<VideoFormat>('mp4');
   const [newDeleteSource, setNewDeleteSource] = useState(true);
+  const [newUseCookie, setNewUseCookie] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
+  // 预览状态
+  const [previewInfo, setPreviewInfo] = useState<PreviewRoomInfo | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -77,6 +92,34 @@ export default function RoomsPage() {
     fetchRooms();
   }, [fetchRooms]);
 
+  // 预览直播间信息
+  const previewRoom = async () => {
+    if (!newUrl.trim()) {
+      setError('请输入直播间 URL 或房间号');
+      return;
+    }
+    setIsPreviewing(true);
+    setError('');
+    setPreviewInfo(null);
+    try {
+      const res = await fetch('/api/rooms/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: newUrl }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setPreviewInfo(data.data);
+      } else {
+        setError(data.error || '无法获取直播间信息');
+      }
+    } catch (err) {
+      setError('预览失败: ' + (err instanceof Error ? err.message : '未知错误'));
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   const addRoom = async () => {
     if (!newUrl.trim()) {
       setError('请输入直播间 URL 或房间号');
@@ -92,6 +135,7 @@ export default function RoomsPage() {
           url: newUrl,
           quality: newQuality,
           recordMode: newRecordMode,
+          useCookie: newUseCookie,
           convertSettings: {
             compositeAutoConvert: newCompositeAutoConvert,
             originalAutoConvert: newOriginalAutoConvert,
@@ -107,6 +151,7 @@ export default function RoomsPage() {
         setNewUrl('');
         setNewQuality('origin');
         setNewRecordMode('original');
+        setPreviewInfo(null);
         setNewCompositeAutoConvert(false);
         setNewOriginalAutoConvert(false);
         setNewConvertFormat('mp4');

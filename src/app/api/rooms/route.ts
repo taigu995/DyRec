@@ -73,6 +73,7 @@ export async function POST(
       autoRecord: true,
       quality: (quality as LiveRoom['quality']) || 'origin',
       recordMode: (body.recordMode as LiveRoom['recordMode']) || 'original',
+      useCookieForRecord: body.useCookieForRecord || false,
       convertSettings: body.convertSettings || {
         compositeAutoConvert: false,
         originalAutoConvert: false,

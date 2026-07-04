@@ -12,6 +12,7 @@ import {
   Eye,
   ShieldCheck,
   FileText,
+  Globe,
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { href: '/rooms', label: '直播间', icon: Radio },
   { href: '/recordings', label: '录制管理', icon: CircleDot },
   { href: '/live', label: '直播预览', icon: Eye },
+  { href: '/browser', label: 'Cookie 管理', icon: Globe },
   { href: '/setup', label: '环境检测', icon: ShieldCheck },
   { href: '/logs', label: '系统日志', icon: FileText },
   { href: '/settings', label: '设置', icon: Settings },
