@@ -450,8 +450,8 @@ export default function RoomsPage() {
                   {/* Info */}
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-zinc-200">
-                        {room.nickname || room.name}
+                      <span className="text-base font-semibold text-zinc-100">
+                        {room.nickname || room.name || `直播间 ${room.roomId}`}
                       </span>
                       {getStatusBadge(room.status)}
                       {getRecordModeBadge(room.recordMode)}
@@ -464,8 +464,8 @@ export default function RoomsPage() {
                         </Badge>
                       )}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-3 text-xs text-zinc-500">
-                      <span className="font-mono">{room.roomId}</span>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500">
+                      <span className="font-mono">房间号: {room.roomId}</span>
                       {room.title && (
                         <span className="truncate max-w-48">
                           {room.title}
