@@ -297,7 +297,7 @@ export default function SetupPage() {
                     <p className="text-xs text-zinc-500">
                       {isElectron
                         ? '点击下方按钮自动下载安装 FFmpeg（约 80MB），安装后即可使用录制功能。'
-                        : '请手动安装 FFmpeg 并添加到系统 PATH，或下载 ffmpeg.exe 放到应用目录。'}
+                        : '点击下方按钮自动下载 FFmpeg（约 80MB），下载完成后即可使用录制功能。'}
                     </p>
                   </div>
                   {installError && (
@@ -305,8 +305,7 @@ export default function SetupPage() {
                       <p className="text-xs text-red-400">{installError}</p>
                     </div>
                   )}
-                  {isElectron && (
-                    <Button
+                  <Button
                       onClick={handleInstallFFmpeg}
                       disabled={isInstalling}
                       className="w-full bg-cyan-600 hover:bg-cyan-500 text-white"
@@ -319,19 +318,10 @@ export default function SetupPage() {
                       ) : (
                         <>
                           <Download className="w-4 h-4 mr-2" />
-                          一键安装 FFmpeg
+                          {isElectron ? '一键安装 FFmpeg' : '自动下载 FFmpeg'}
                         </>
                       )}
                     </Button>
-                  )}
-                  {!isElectron && (
-                    <div className="p-3 rounded-lg bg-zinc-800 border border-zinc-700">
-                      <p className="text-xs text-zinc-400 font-mono">
-                        # Windows: 下载 ffmpeg.exe 放到应用目录<br />
-                        # 或访问 https://ffmpeg.org/download.html
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -364,7 +354,7 @@ export default function SetupPage() {
         {!isElectron && (
           <div className="mt-6 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
             <p className="text-xs text-zinc-500 text-center">
-              当前为 Web 模式运行。打包为桌面应用后可使用一键安装功能。
+              当前为 Web 模式运行，支持自动下载 FFmpeg。下载的文件将保存在应用目录的 .deps 文件夹中。
             </p>
           </div>
         )}

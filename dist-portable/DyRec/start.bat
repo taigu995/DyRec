@@ -22,8 +22,13 @@ echo [OK] Node.js found: %NODE_VERSION%
 REM Check FFmpeg
 where ffmpeg >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [WARN] FFmpeg not found - recording disabled
-    echo        You can install FFmpeg from the app settings
+    if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
+        echo [OK] FFmpeg found in .deps folder
+        set PATH=%PATH%;%CD%\.deps\ffmpeg\bin
+    ) else (
+        echo [WARN] FFmpeg not found - will auto-download
+        echo        You can also install FFmpeg from /setup page
+    )
 ) else (
     echo [OK] FFmpeg found
 )
@@ -67,10 +72,10 @@ echo [INFO] Waiting for server to start...
 timeout /t 3 /nobreak >nul
 
 REM Auto-check and install dependencies via API
-echo [INFO] Checking dependencies...
+echo [INFO] Checking and downloading dependencies...
 curl -s -X POST http://localhost:5000/api/dependencies -H "Content-Type: application/json" -d "{\"action\":\"auto\"}" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] Dependencies checked
+    echo [OK] Dependencies ready
 ) else (
     echo [WARN] Dependency check failed - you can check manually at /setup
 )
