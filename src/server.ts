@@ -6,6 +6,17 @@ const dev = process.env.COZE_PROJECT_ENV !== 'PROD';
 const hostname = process.env.HOSTNAME || 'localhost';
 const port = parseInt(process.env.PORT || '5000', 10);
 
+// 全局错误处理 - 防止未捕获异常导致服务器崩溃
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err.message);
+  // 不退出进程，记录错误继续运行
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled rejection:', reason);
+  // 不退出进程，记录错误继续运行
+});
+
 // Create Next.js app
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
