@@ -29,8 +29,14 @@ echo.
 REM Navigate to project directory
 cd /d "%~dp0\.."
 
+REM Clean node_modules to avoid package manager conflicts
+echo [0/4] Cleaning previous dependencies...
+if exist node_modules rmdir /s /q node_modules
+if exist .next rmdir /s /q .next
+if exist pnpm-lock.yaml del /q pnpm-lock.yaml
+
 echo [1/4] Installing dependencies...
-call pnpm install
+call pnpm install --no-frozen-lockfile
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Failed to install dependencies
     pause
