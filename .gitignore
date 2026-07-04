@@ -16,6 +16,10 @@ __pycache__/
 
 # JS/TS bundlers & build outputs
 .next
+
+# App data
+/data
+/recordings
 .nuxt
 .turbo
 .vercel

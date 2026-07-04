@@ -1,5 +1,9 @@
 # 项目上下文
 
+## 项目概述
+
+**DyRec** - 抖音直播自动录制管理工具。借鉴 biliLive-tools 架构，提供 Web 管理界面，支持自动监控抖音直播间开播状态并调用 FFmpeg 录制直播流。
+
 ### 版本技术栈
 
 - **Framework**: Next.js 16 (App Router)
@@ -7,26 +11,42 @@
 - **Language**: TypeScript 5
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
+- **Icons**: lucide-react
 
 ## 目录结构
 
 ```
+├── data/                   # JSON 数据存储 (运行时生成)
+│   ├── rooms.json          # 直播间列表
+│   ├── tasks.json          # 录制任务
+│   ├── settings.json       # 应用设置
+│   └── history.json        # 录制历史
 ├── public/                 # 静态资源
 ├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
 ├── src/
-│   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+│   ├── app/
+│   │   ├── api/            # API 路由
+│   │   │   ├── rooms/      # 直播间 CRUD
+│   │   │   ├── monitor/    # 直播状态检测
+│   │   │   ├── record/     # 录制任务管理
+│   │   │   └── settings/   # 设置读写
+│   │   ├── rooms/          # 直播间管理页面
+│   │   ├── recordings/     # 录制管理页面
+│   │   ├── settings/       # 设置页面
+│   │   ├── layout.tsx      # 根布局 (侧边栏)
+│   │   └── page.tsx        # 仪表盘
+│   ├── components/
+│   │   ├── layout/         # 布局组件 (sidebar)
+│   │   └── ui/             # shadcn/ui 组件
+│   └── lib/
+│       ├── types.ts        # 类型定义
+│       ├── store.ts        # JSON 文件存储
+│       ├── douyin.ts       # 抖音 API (房间信息/流地址)
+│       ├── recorder.ts     # FFmpeg 录制管理
+│       └── utils.ts        # 通用工具
+├── next.config.ts
+├── package.json
+└── tsconfig.json
 ```
 
 - 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
