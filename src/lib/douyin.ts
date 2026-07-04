@@ -174,7 +174,20 @@ export async function fetchRoomInfo(
 
     const json = (await response.json()) as DouyinApiResponse;
 
-    if (json.status_code !== 0 || !json.data?.data?.length) {
+    // 调试日志
+    console.log('[Douyin API] Response:', JSON.stringify(json, null, 2).substring(0, 500));
+
+    if (json.status_code !== 0) {
+      console.log('[Douyin API] Non-zero status_code:', json.status_code);
+      return {
+        isLive: false,
+        roomData: null,
+        streamUrls: { flv: {}, hls: {} },
+      };
+    }
+
+    if (!json.data?.data?.length) {
+      console.log('[Douyin API] No room data found');
       return {
         isLive: false,
         roomData: null,
@@ -185,6 +198,8 @@ export async function fetchRoomInfo(
     const roomData = json.data.data[0];
     const isLive = roomData.status === 2;
 
+    console.log('[Douyin API] Room status:', roomData.status, 'isLive:', isLive);
+
     const streamUrls = {
       flv: roomData.stream_url?.flv_pull_url ?? {},
       hls: roomData.stream_url?.hls_pull_url_map ?? {},
@@ -193,6 +208,7 @@ export async function fetchRoomInfo(
     return { isLive, roomData, streamUrls };
   } catch (error) {
     const msg = error instanceof Error ? error.message : '未知错误';
+    console.error('[Douyin API] Error:', msg);
     throw new Error(`获取直播间信息失败: ${msg}`);
   }
 }
@@ -258,14 +274,77 @@ export async function checkLiveStatus(
   viewerCount: number;
   avatar: string;
 }> {
-  const result = await fetchRoomInfo(webRid, cookie);
+  try {
+    const result = await fetchRoomInfo(webRid, cookie);
+    return {
+      isLive: result.isLive,
+      title: result.roomData?.title ?? '',
+      nickname: result.roomData?.owner?.nickname ?? '',
+      viewerCount: result.roomData?.user_count ?? 0,
+      avatar:
+        result.roomData?.owner?.avatar_thumb?.url_list?.[0] ?? '',
+    };
+  } catch (error) {
+    console.error('[checkLiveStatus] API failed, trying fallback:', error);
+    // 尝试备用方法：直接访问直播页面
+    return await checkLiveStatusFallback(webRid);
+  }
+}
 
-  return {
-    isLive: result.isLive,
-    title: result.roomData?.title ?? '',
-    nickname: result.roomData?.owner?.nickname ?? '',
-    viewerCount: result.roomData?.user_count ?? 0,
-    avatar:
-      result.roomData?.owner?.avatar_thumb?.url_list?.[0] ?? '',
-  };
+/**
+ * 备用方法：通过访问直播页面检测状态
+ */
+async function checkLiveStatusFallback(webRid: string): Promise<{
+  isLive: boolean;
+  title: string;
+  nickname: string;
+  viewerCount: number;
+  avatar: string;
+}> {
+  try {
+    const url = `${DOUYIN_LIVE_URL}/${webRid}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: DEFAULT_HEADERS,
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      return { isLive: false, title: '', nickname: '', viewerCount: 0, avatar: '' };
+    }
+
+    const html = await response.text();
+
+    // 尝试从页面中提取房间信息
+    // 查找 __NEXT_DATA__ 或 RENDER_DATA
+    const renderDataMatch = html.match(/<script id="RENDER_DATA" type="application\/json">([^<]+)<\/script>/);
+    if (renderDataMatch) {
+      try {
+        const decoded = decodeURIComponent(renderDataMatch[1]);
+        const data = JSON.parse(decoded);
+        // 遍历查找房间数据
+        for (const key of Object.keys(data)) {
+          const value = data[key];
+          if (value?.roomInfo?.room) {
+            const room = value.roomInfo.room;
+            return {
+              isLive: room.status === 2,
+              title: room.title || '',
+              nickname: room.owner?.nickname || '',
+              viewerCount: room.user_count || 0,
+              avatar: room.owner?.avatar_thumb?.url_list?.[0] || '',
+            };
+          }
+        }
+      } catch {
+        // JSON 解析失败
+      }
+    }
+
+    // 简单检测：页面中是否有 "直播中" 或 "replay" 相关标记
+    const isLive = html.includes('"status":2') || html.includes('"isLive":true');
+    return { isLive, title: '', nickname: '', viewerCount: 0, avatar: '' };
+  } catch {
+    return { isLive: false, title: '', nickname: '', viewerCount: 0, avatar: '' };
+  }
 }
