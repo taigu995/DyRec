@@ -15,6 +15,7 @@ import {
   Square,
   Settings2,
   Monitor,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,7 @@ import { StreamPlayer } from '@/components/live/stream-player';
 import { DanmakuOverlay } from '@/components/live/danmaku-overlay';
 import { GiftEffect } from '@/components/live/gift-effect';
 import { useDanmaku } from '@/components/live/use-danmaku';
+import { useCanvasRecorder } from '@/components/live/use-canvas-recorder';
 import type {
   LiveRoom,
   RecordingTask,
@@ -43,13 +45,31 @@ export default function LivePreviewPage() {
   const [showDanmaku, setShowDanmaku] = useState(true);
   const [showGifts, setShowGifts] = useState(true);
   const [danmakuEnabled, setDanmakuEnabled] = useState(true);
+  const [isCanvasRecording, setIsCanvasRecording] = useState(false);
   const chatListRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // 弹幕 hook
   const { messages, status: danmakuStatus, stats } = useDanmaku({
     roomId,
     enabled: danmakuEnabled,
   });
+
+  // Canvas 录制 hook (录制包含弹幕+礼物的画面)
+  const canvasRecorder = useCanvasRecorder(720, 1280, 30);
+
+  // 同步视频元素到 Canvas 录制器
+  useEffect(() => {
+    canvasRecorder.setVideoElement(videoRef.current);
+  }, [canvasRecorder]);
+
+  // 将弹幕和礼物数据传递给 Canvas 录制器
+  useEffect(() => {
+    if (isCanvasRecording) {
+      canvasRecorder.processDanmaku(messages as DanmakuMessage[]);
+      canvasRecorder.processGifts(messages as GiftMessage[]);
+    }
+  }, [messages, isCanvasRecording, canvasRecorder]);
 
   // 获取房间信息
   const fetchRoomInfo = useCallback(async () => {
@@ -148,6 +168,17 @@ export default function LivePreviewPage() {
     }
   };
 
+  // Canvas 录制 (包含弹幕+礼物)
+  const startCanvasRecording = () => {
+    canvasRecorder.startRecording();
+    setIsCanvasRecording(true);
+  };
+
+  const stopCanvasRecording = () => {
+    canvasRecorder.stopRecording();
+    setIsCanvasRecording(false);
+  };
+
   const chatMessages = messages.filter(
     (m) => m.type === 'chat'
   ) as DanmakuMessage[];
@@ -179,6 +210,14 @@ export default function LivePreviewPage() {
       default:
         return '未连接';
     }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
   };
 
   return (
@@ -234,6 +273,7 @@ export default function LivePreviewPage() {
             <StreamPlayer
               streamUrl={streamUrl}
               isLive={room?.status === 'live'}
+              videoRef={videoRef}
             />
 
             {/* 弹幕叠加层 */}
@@ -257,13 +297,68 @@ export default function LivePreviewPage() {
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
               录制控制
             </h3>
-            <div className="flex gap-2">
+
+            {/* Canvas 录制 (含弹幕+礼物) */}
+            <div className="mb-3">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <Video className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-xs font-medium text-zinc-300">
+                  合成录制
+                </span>
+                <Badge className="ml-auto bg-cyan-500/10 text-cyan-400 border-cyan-800/50 text-[10px]">
+                  弹幕+礼物
+                </Badge>
+              </div>
+              {isCanvasRecording ? (
+                <div>
+                  <Button
+                    onClick={stopCanvasRecording}
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                  >
+                    <Square className="mr-1.5 h-3.5 w-3.5" />
+                    停止合成录制
+                  </Button>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="rec-pulse h-2 w-2 rounded-full bg-red-500" />
+                    <span className="text-xs text-red-400">
+                      录制中 {formatDuration(canvasRecorder.duration)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  onClick={startCanvasRecording}
+                  size="sm"
+                  className="w-full bg-cyan-600 hover:bg-cyan-700"
+                  disabled={room?.status !== 'live'}
+                >
+                  <Video className="mr-1.5 h-3.5 w-3.5" />
+                  开始合成录制
+                </Button>
+              )}
+            </div>
+
+            <div className="mb-2 h-px bg-zinc-800" />
+
+            {/* FFmpeg 录制 (纯流) */}
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <CircleDot className="h-3.5 w-3.5 text-red-400" />
+                <span className="text-xs font-medium text-zinc-300">
+                  原始流录制
+                </span>
+                <Badge className="ml-auto bg-zinc-700/50 text-zinc-400 border-zinc-600/50 text-[10px]">
+                  仅画面
+                </Badge>
+              </div>
               {isRecording ? (
                 <Button
                   onClick={stopRecording}
                   variant="destructive"
                   size="sm"
-                  className="flex-1"
+                  className="w-full"
                 >
                   <Square className="mr-1.5 h-3.5 w-3.5" />
                   停止录制
@@ -272,20 +367,21 @@ export default function LivePreviewPage() {
                 <Button
                   onClick={startRecording}
                   size="sm"
-                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  variant="outline"
+                  className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                   disabled={room?.status !== 'live'}
                 >
                   <CircleDot className="mr-1.5 h-3.5 w-3.5" />
-                  开始录制
+                  开始原始录制
                 </Button>
               )}
+              {isRecording && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="rec-pulse h-2 w-2 rounded-full bg-red-500" />
+                  <span className="text-xs text-red-400">正在录制...</span>
+                </div>
+              )}
             </div>
-            {isRecording && (
-              <div className="mt-2 flex items-center gap-1.5">
-                <span className="rec-pulse h-2 w-2 rounded-full bg-red-500" />
-                <span className="text-xs text-red-400">正在录制...</span>
-              </div>
-            )}
           </div>
 
           {/* 显示设置 */}

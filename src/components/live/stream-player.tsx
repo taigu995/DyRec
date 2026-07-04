@@ -8,6 +8,7 @@ interface StreamPlayerProps {
   isLive: boolean;
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
 export function StreamPlayer({
@@ -15,8 +16,10 @@ export function StreamPlayer({
   isLive,
   muted = true,
   onMutedChange,
+  videoRef: externalVideoRef,
 }: StreamPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const internalVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = externalVideoRef || internalVideoRef;
   const [hasError, setHasError] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
 
