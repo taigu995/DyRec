@@ -35,7 +35,7 @@ echo   Installing dependencies...
 echo --------------------------------------------
 echo.
 
-call npm install --production --no-audit --no-fund --loglevel=error
+call npm install --production --legacy-peer-deps --no-audit --no-fund --loglevel=error
 
 echo.
 echo --------------------------------------------
