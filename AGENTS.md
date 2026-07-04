@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-**DyRec** - 抖音直播自动录制管理工具。借鉴 biliLive-tools 架构，提供 Web 管理界面，支持自动监控抖音直播间开播状态并调用 FFmpeg 录制直播流。
+**DyRec** - 抖音直播自动录制管理工具。借鉴 biliLive-tools 架构，提供 Web 管理界面，支持自动监控抖音直播间开播状态并调用 FFmpeg 录制直播流。支持手机端视角预览，实时弹幕滚动和礼物特效叠加显示。
 
 ### 版本技术栈
 
@@ -12,6 +12,8 @@
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
 - **Icons**: lucide-react
+- **WebSocket**: ws (抖音弹幕/礼物实时推送)
+- **Protobuf**: protobufjs (抖音消息协议解析)
 
 ## 目录结构
 
@@ -29,19 +31,30 @@
 │   │   │   ├── rooms/      # 直播间 CRUD
 │   │   │   ├── monitor/    # 直播状态检测
 │   │   │   ├── record/     # 录制任务管理
-│   │   │   └── settings/   # 设置读写
+│   │   │   ├── settings/   # 设置读写
+│   │   │   └── danmaku/    # SSE 弹幕流转发
 │   │   ├── rooms/          # 直播间管理页面
 │   │   ├── recordings/     # 录制管理页面
+│   │   ├── live/           # 直播预览页面
+│   │   │   ├── page.tsx    # 预览列表 (卡片式)
+│   │   │   └── [roomId]/   # 单直播间手机视角预览
 │   │   ├── settings/       # 设置页面
 │   │   ├── layout.tsx      # 根布局 (侧边栏)
 │   │   └── page.tsx        # 仪表盘
 │   ├── components/
 │   │   ├── layout/         # 布局组件 (sidebar)
+│   │   ├── live/           # 直播预览组件
+│   │   │   ├── mobile-frame.tsx      # 手机外框
+│   │   │   ├── stream-player.tsx     # 直播流播放器
+│   │   │   ├── danmaku-overlay.tsx   # 弹幕滚动叠加层
+│   │   │   ├── gift-effect.tsx       # 礼物特效叠加层
+│   │   │   └── use-danmaku.ts        # 弹幕 SSE Hook
 │   │   └── ui/             # shadcn/ui 组件
 │   └── lib/
 │       ├── types.ts        # 类型定义
 │       ├── store.ts        # JSON 文件存储
 │       ├── douyin.ts       # 抖音 API (房间信息/流地址)
+│       ├── douyin-ws.ts    # 抖音 WebSocket (弹幕/礼物)
 │       ├── recorder.ts     # FFmpeg 录制管理
 │       └── utils.ts        # 通用工具
 ├── next.config.ts

@@ -9,12 +9,14 @@ import {
   CircleDot,
   Settings,
   Monitor,
+  Eye,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: '仪表盘', icon: LayoutDashboard },
   { href: '/rooms', label: '直播间', icon: Radio },
   { href: '/recordings', label: '录制管理', icon: CircleDot },
+  { href: '/live', label: '直播预览', icon: Eye },
   { href: '/settings', label: '设置', icon: Settings },
 ];
 

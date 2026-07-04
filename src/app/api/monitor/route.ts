@@ -3,9 +3,14 @@ import { getRooms, updateRoom, getSettings } from '@/lib/store';
 import { checkLiveStatus, fetchRoomInfo, getBestStreamUrl } from '@/lib/douyin';
 import type { ApiResponse, LiveRoom } from '@/lib/types';
 
+/** 扩展 LiveRoom 带 streamUrl */
+interface LiveRoomWithStream extends LiveRoom {
+  streamUrl?: string | null;
+}
+
 /** GET - 检测所有直播间状态 */
 export async function GET(): Promise<
-  NextResponse<ApiResponse<{ rooms: LiveRoom[]; liveCount: number }>>
+  NextResponse<ApiResponse<{ rooms: LiveRoomWithStream[]; liveCount: number }>>
 > {
   try {
     const rooms = getRooms();
@@ -16,39 +21,58 @@ export async function GET(): Promise<
     const results = await Promise.allSettled(
       rooms.map(async (room) => {
         try {
-          const status = await checkLiveStatus(room.roomId, settings.cookie);
-          return { room, status };
+          const info = await fetchRoomInfo(room.roomId, settings.cookie);
+          return { room, info };
         } catch {
-          return { room, status: null };
+          return { room, info: null };
         }
       })
     );
 
     // 更新每个房间的状态
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.status) {
-        const { room, status } = result.value;
-        const newStatus = status.isLive ? 'live' : 'offline';
-        if (newStatus !== room.status) {
-          updateRoom(room.roomId, {
-            status: newStatus,
-            lastCheckedAt: Date.now(),
-            title: status.title,
-            nickname: status.nickname || room.nickname,
-            viewerCount: status.viewerCount,
-            avatar: status.avatar || room.avatar,
-          });
-        } else {
-          updateRoom(room.roomId, {
-            lastCheckedAt: Date.now(),
-            viewerCount: status.viewerCount,
-          });
-        }
-        if (status.isLive) liveCount++;
+      if (result.status === 'fulfilled' && result.value.info) {
+        const { room, info } = result.value;
+        const newStatus = info.isLive ? 'live' : 'offline';
+        const streamUrl = info.isLive
+          ? getBestStreamUrl(info.streamUrls.flv, room.quality)
+          : null;
+
+        updateRoom(room.roomId, {
+          status: newStatus,
+          lastCheckedAt: Date.now(),
+          title: info.roomData?.title || room.title,
+          nickname: info.roomData?.owner?.nickname || room.nickname,
+          viewerCount: info.roomData?.user_count || room.viewerCount,
+          avatar:
+            info.roomData?.owner?.avatar_thumb?.url_list?.[0] ||
+            room.avatar,
+        });
+        if (info.isLive) liveCount++;
+
+        // 将 streamUrl 附加到 room 对象上用于返回
+        (room as LiveRoomWithStream).streamUrl = streamUrl;
       }
     }
 
-    const updatedRooms = getRooms();
+    const updatedRooms = getRooms() as LiveRoomWithStream[];
+    // 为直播中的房间附加 streamUrl
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value.info?.isLive) {
+        const { room, info } = result.value;
+        const streamUrl = getBestStreamUrl(
+          info.streamUrls.flv,
+          room.quality
+        );
+        const updated = updatedRooms.find(
+          (r) => r.roomId === room.roomId
+        );
+        if (updated) {
+          updated.streamUrl = streamUrl;
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: { rooms: updatedRooms, liveCount },

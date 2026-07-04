@@ -25,6 +25,10 @@ export interface LiveRoom {
   nickname: string;
   /** 在线人数 */
   viewerCount: number;
+  /** 封面图 */
+  cover?: {
+    url_list: string[];
+  };
 }
 
 /** 录制任务 */
@@ -145,3 +149,69 @@ export interface DouyinApiResponse {
   };
   status_code: number;
 }
+
+// ============================================================
+// 弹幕 & 礼物 类型
+// ============================================================
+
+/** 弹幕消息 */
+export interface DanmakuMessage {
+  id: string;
+  type: 'chat';
+  /** 用户昵称 */
+  nickname: string;
+  /** 用户头像 */
+  avatar: string;
+  /** 弹幕内容 */
+  content: string;
+  /** 时间戳 */
+  timestamp: number;
+  /** 颜色 (hex) */
+  color: string;
+}
+
+/** 礼物消息 */
+export interface GiftMessage {
+  id: string;
+  type: 'gift';
+  /** 用户昵称 */
+  nickname: string;
+  /** 用户头像 */
+  avatar: string;
+  /** 礼物名称 */
+  giftName: string;
+  /** 礼物图标 */
+  giftIcon: string;
+  /** 礼物数量 */
+  count: number;
+  /** 礼物价值 (抖币) */
+  diamondCount: number;
+  /** 时间戳 */
+  timestamp: number;
+  /** 是否连击 */
+  combo: boolean;
+}
+
+/** 进场消息 */
+export interface EnterMessage {
+  id: string;
+  type: 'enter';
+  nickname: string;
+  avatar: string;
+  timestamp: number;
+}
+
+/** 点赞消息 */
+export interface LikeMessage {
+  id: string;
+  type: 'like';
+  nickname: string;
+  count: number;
+  timestamp: number;
+}
+
+/** 所有消息联合类型 */
+export type LiveMessage = DanmakuMessage | GiftMessage | EnterMessage | LikeMessage;
+
+/** 弹幕连接状态 */
+export type DanmakuConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';

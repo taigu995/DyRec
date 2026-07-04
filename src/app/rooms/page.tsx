@@ -11,6 +11,7 @@ import {
   Settings2,
   Play,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -378,6 +379,15 @@ export default function RoomsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(`/live/${room.roomId}`, '_blank')}
+                    className="text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300"
+                    title="手机视角预览"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
                   {room.status === 'live' && (
                     <Button
                       variant="ghost"
