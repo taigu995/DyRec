@@ -34,6 +34,17 @@ interface InstallProgress {
   stage: string;
   percent: number;
   message: string;
+  downloaded?: number;
+  total?: number;
+}
+
+// 格式化字节数
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Electron API 类型
@@ -156,22 +167,52 @@ export default function SetupPage() {
           );
         }
       } else {
-        // Web 环境：使用 API 安装
-        const res = await fetch('/api/dependencies', {
+        // Web 环境：使用 SSE 获取安装进度
+        const eventSource = new EventSource('/api/dependencies/progress');
+        
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === 'progress') {
+            setInstallProgress({
+              stage: data.stage,
+              percent: data.percent,
+              message: data.message,
+              downloaded: data.downloaded,
+              total: data.total,
+            });
+          } else if (data.type === 'complete') {
+            eventSource.close();
+            setInstallProgress({ stage: 'complete', percent: 100, message: '安装完成' });
+            runCheck();
+          } else if (data.type === 'error') {
+            eventSource.close();
+            setInstallError(data.message);
+            setDependencies((prev) =>
+              prev.map((dep) => (dep.name === 'FFmpeg' ? { ...dep, status: 'failed' as const } : dep))
+            );
+          }
+        };
+
+        eventSource.onerror = () => {
+          eventSource.close();
+          // 触发安装
+          fetch('/api/dependencies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'auto' }),
+          }).then(res => res.json()).then(data => {
+            if (!data.success) {
+              setInstallError(data.error || '安装失败');
+            }
+          });
+        };
+
+        // 触发安装
+        fetch('/api/dependencies', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'auto' }),
         });
-        const data = await res.json();
-        if (data.success) {
-          setInstallProgress({ stage: 'complete', percent: 100, message: '安装完成' });
-          await runCheck();
-        } else {
-          setInstallError(data.error || '安装失败');
-          setDependencies((prev) =>
-            prev.map((dep) => (dep.name === 'FFmpeg' ? { ...dep, status: 'failed' as const } : dep))
-          );
-        }
       }
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : '安装失败');
@@ -289,6 +330,12 @@ export default function SetupPage() {
                     <span className="text-sm text-cyan-400">{installProgress.percent}%</span>
                   </div>
                   <Progress value={installProgress.percent} className="h-2" />
+                  {installProgress.downloaded && installProgress.total && (
+                    <div className="flex items-center justify-between text-xs text-zinc-500">
+                      <span>已下载: {formatBytes(installProgress.downloaded)}</span>
+                      <span>总计: {formatBytes(installProgress.total)}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
