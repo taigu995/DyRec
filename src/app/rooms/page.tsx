@@ -44,6 +44,13 @@ export default function RoomsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
 
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editRoom, setEditRoom] = useState<LiveRoom | null>(null);
+  const [editRecordMode, setEditRecordMode] = useState<RecordingMode>('original');
+  const [editQuality, setEditQuality] = useState<string>('origin');
+  const [editAutoRecord, setEditAutoRecord] = useState(false);
+
   const fetchRooms = useCallback(async () => {
     try {
       const res = await fetch('/api/rooms');
@@ -156,6 +163,42 @@ export default function RoomsPage() {
       }
     } catch (err) {
       console.error('录制失败:', err);
+    }
+  };
+
+  const openEditDialog = (room: LiveRoom) => {
+    setEditRoom(room);
+    setEditRecordMode(room.recordMode || 'original');
+    setEditQuality(room.quality || 'origin');
+    setEditAutoRecord(room.autoRecord || false);
+    setEditDialogOpen(true);
+  };
+
+  const saveRoomSettings = async () => {
+    if (!editRoom) return;
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: editRoom.roomId,
+          updates: {
+            recordMode: editRecordMode,
+            quality: editQuality,
+            autoRecord: editAutoRecord,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRooms(data.data);
+        setEditDialogOpen(false);
+        setEditRoom(null);
+      } else {
+        alert(data.error || '保存失败');
+      }
+    } catch {
+      alert('网络错误，请重试');
     }
   };
 
@@ -477,6 +520,15 @@ export default function RoomsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => openEditDialog(room)}
+                    className="h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-400"
+                    title="设置"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => removeRoom(room.roomId)}
                     className="h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-800 hover:text-red-400"
                     title="删除"
@@ -489,6 +541,85 @@ export default function RoomsPage() {
           ))}
         </div>
       )}
+
+      {/* Edit Room Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="border-zinc-800 bg-zinc-900">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">
+              直播间设置 - {editRoom?.nickname || editRoom?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-sm text-zinc-400">房间号</label>
+              <Input
+                value={editRoom?.roomId || ''}
+                disabled
+                className="border-zinc-700 bg-zinc-800 text-zinc-400"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-zinc-400">录制模式</label>
+              <Select
+                value={editRecordMode}
+                onValueChange={(v) => setEditRecordMode(v as RecordingMode)}
+              >
+                <SelectTrigger className="border-zinc-700 bg-zinc-800 text-zinc-100">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-zinc-700 bg-zinc-800">
+                  <SelectItem value="original">原始流录制</SelectItem>
+                  <SelectItem value="composite">合成录制</SelectItem>
+                  <SelectItem value="both">两者同步录制</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-zinc-500">
+                {editRecordMode === 'original' && '直接录制直播流，画质最高，文件为 .ts 格式'}
+                {editRecordMode === 'composite' && '录制画面+弹幕+礼物，文件为 .webm 格式（需在预览页面录制）'}
+                {editRecordMode === 'both' && '同时启动原始流录制和合成录制'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-zinc-400">录制画质</label>
+              <Select
+                value={editQuality}
+                onValueChange={setEditQuality}
+              >
+                <SelectTrigger className="border-zinc-700 bg-zinc-800 text-zinc-100">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-zinc-700 bg-zinc-800">
+                  <SelectItem value="origin">原画</SelectItem>
+                  <SelectItem value="uhd">超清</SelectItem>
+                  <SelectItem value="hd">高清</SelectItem>
+                  <SelectItem value="sd">标清</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-zinc-700 p-3">
+              <div>
+                <p className="text-sm text-zinc-200">自动录制</p>
+                <p className="text-xs text-zinc-500">开播时自动开始录制</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditAutoRecord(!editAutoRecord)}
+                className={editAutoRecord ? 'text-cyan-400' : 'text-zinc-500'}
+              >
+                {editAutoRecord ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+              </Button>
+            </div>
+            <Button
+              className="w-full bg-cyan-600 hover:bg-cyan-700"
+              onClick={saveRoomSettings}
+            >
+              保存设置
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
