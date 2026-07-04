@@ -1,4 +1,5 @@
 import type { DouyinApiResponse, DouyinRoomData } from './types';
+import logger from './logger';
 
 // ============================================================
 // 抖音直播 API - 获取直播间信息与流地址
@@ -162,6 +163,8 @@ export async function fetchRoomInfo(
   const url = `${DOUYIN_API_URL}?${params.toString()}`;
 
   try {
+    logger.info('douyin', `Fetching room info for webRid: ${webRid}`);
+
     const response = await fetch(url, {
       method: 'GET',
       headers,
@@ -169,13 +172,14 @@ export async function fetchRoomInfo(
     });
 
     if (!response.ok) {
+      logger.error('douyin', `HTTP error: ${response.status} ${response.statusText}`);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const json = (await response.json()) as DouyinApiResponse;
 
     // 调试日志
-    console.log('[Douyin API] Response:', JSON.stringify(json, null, 2).substring(0, 500));
+    logger.debug('douyin', 'API response', { status_code: json.status_code, data: JSON.stringify(json).substring(0, 500) });
 
     if (json.status_code !== 0) {
       console.log('[Douyin API] Non-zero status_code:', json.status_code);
