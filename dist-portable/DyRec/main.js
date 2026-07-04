@@ -244,6 +244,20 @@ ipcMain.handle('deps:get-deps-dir', () => {
   return { success: true, data: depChecker.getDepsDir() };
 });
 
+// 开机自启动
+ipcMain.handle('autostart:get', () => {
+  const settings = app.getLoginItemSettings();
+  return { success: true, data: { enabled: settings.openAtLogin } };
+});
+
+ipcMain.handle('autostart:set', (_, enabled) => {
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    openAsHidden: true, // 启动时最小化到托盘
+  });
+  return { success: true, data: { enabled } };
+});
+
 // 应用就绪
 app.whenReady().then(async () => {
   // 启动 Next.js 服务器

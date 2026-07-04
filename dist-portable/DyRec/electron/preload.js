@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // 开机自启动
+  autoStart: {
+    get: () => ipcRenderer.invoke('autostart:get'),
+    set: (enabled) => ipcRenderer.invoke('autostart:set', enabled),
+  },
+
   // 是否为 Electron 环境
   isElectron: true,
 });
