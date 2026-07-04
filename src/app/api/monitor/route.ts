@@ -35,7 +35,7 @@ export async function GET(): Promise<
         const { room, info } = result.value;
         const newStatus = info.isLive ? 'live' : 'offline';
         const streamUrl = info.isLive
-          ? getBestStreamUrl(info.streamUrls.flv, room.quality)
+          ? getBestStreamUrl(info.streamUrls.flv, 'origin')
           : null;
 
         updateRoom(room.roomId, {
@@ -62,7 +62,7 @@ export async function GET(): Promise<
         const { room, info } = result.value;
         const streamUrl = getBestStreamUrl(
           info.streamUrls.flv,
-          room.quality
+          'origin'
         );
         const updated = updatedRooms.find(
           (r) => r.roomId === room.roomId

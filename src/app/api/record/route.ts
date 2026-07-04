@@ -83,7 +83,8 @@ export async function POST(
       );
     }
 
-    const streamUrl = getBestStreamUrl(roomInfo.streamUrls.flv, room?.quality || 'origin');
+    // 录制始终使用最高画质 (origin)
+    const streamUrl = getBestStreamUrl(roomInfo.streamUrls.flv, 'origin');
     if (!streamUrl) {
       return NextResponse.json(
         { success: false, error: '无法获取直播流地址' },
