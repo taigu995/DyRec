@@ -1,32 +1,31 @@
 @echo off
-chcp 65001 >nul
-title DyRec - Douyin Live Recorder
+chcp 65001 >nul 2>&1
+setlocal enabledelayedexpansion
 
 REM Create logs directory
 if not exist "logs" mkdir logs
 
-REM Get current timestamp for log filename
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set datetime=%%I
-set datetime=%datetime:~0,4%-%datetime:~4,2%-%datetime:~6,2%_%datetime:~8,2%%datetime:~10,2%%datetime:~12,2%
+REM Generate log filename with timestamp
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
+set TIMESTAMP=%datetime:~0,8%_%datetime:~8,6%
+set LOG_FILE=logs\startup_%TIMESTAMP%.log
+set ERROR_LOG=logs\startup_%TIMESTAMP%.error.log
 
-REM Log file paths
-set LOG_FILE=logs\startup_%datetime%.log
-set ERROR_FILE=logs\startup_%datetime%.error.log
+REM Initialize log file
+echo [%date% %time%] DyRec Startup Log > "%LOG_FILE%"
+echo [%date% %time%] Working directory: %CD% >> "%LOG_FILE%"
+echo. >> "%LOG_FILE%"
 
 echo ============================================
 echo   DyRec - Douyin Live Recorder Startup
 echo ============================================
 echo.
-echo [INFO] Log file: %LOG_FILE%
-echo [INFO] Error log: %ERROR_FILE%
+echo Log file: %LOG_FILE%
 echo.
-
-REM Initialize log file
-echo [%date% %time%] DyRec Startup Log > "%LOG_FILE%"
-echo [%date% %time%] Working directory: %CD% >> "%LOG_FILE%"
 
 REM Check Node.js
 echo [INFO] Checking Node.js...
+echo [%date% %time%] Checking Node.js... >> "%LOG_FILE%"
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found! >> "%LOG_FILE%"
@@ -40,9 +39,11 @@ if %errorlevel% neq 0 (
 for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
 echo [OK] Node.js found: %NODE_VERSION%
 echo [OK] Node.js found: %NODE_VERSION% >> "%LOG_FILE%"
+echo. >> "%LOG_FILE%"
 
 REM Check FFmpeg
 echo [INFO] Checking FFmpeg...
+echo [%date% %time%] Checking FFmpeg... >> "%LOG_FILE%"
 where ffmpeg >nul 2>nul
 if %errorlevel% neq 0 (
     if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
@@ -58,8 +59,8 @@ if %errorlevel% neq 0 (
     echo [OK] FFmpeg found
     echo [OK] FFmpeg found >> "%LOG_FILE%"
 )
+echo. >> "%LOG_FILE%"
 
-echo.
 echo --------------------------------------------
 echo   Installing dependencies...
 echo --------------------------------------------
@@ -70,6 +71,9 @@ REM Check if node_modules exists
 if not exist "node_modules" (
     echo [INFO] node_modules not found, installing...
     echo [INFO] node_modules not found, installing... >> "%LOG_FILE%"
+) else (
+    echo [INFO] node_modules exists, checking...
+    echo [INFO] node_modules exists >> "%LOG_FILE%"
 )
 
 REM Install dependencies using Chinese mirror
@@ -78,70 +82,62 @@ echo [INFO] Running: npm install --production --legacy-peer-deps >> "%LOG_FILE%"
 call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund >> "%LOG_FILE%" 2>&1
 
 if %errorlevel% neq 0 (
+    echo [ERROR] npm install failed with error code: %errorlevel%
+    echo [ERROR] npm install failed with error code: %errorlevel% >> "%LOG_FILE%"
+    echo Please check the log file for details: %LOG_FILE%
     echo.
-    echo [WARN] Dependency installation failed with error code: %errorlevel%
-    echo [WARN] Dependency installation failed with error code: %errorlevel% >> "%LOG_FILE%"
-    echo       You can try running: npm install --production
-    echo.
-) else (
-    echo [OK] Dependencies installed successfully
-    echo [OK] Dependencies installed successfully >> "%LOG_FILE%"
+    echo Press any key to exit...
+    pause >nul
+    exit /b 1
 )
 
-echo.
+echo [OK] Dependencies installed
+echo [OK] Dependencies installed >> "%LOG_FILE%"
+echo. >> "%LOG_FILE%"
+
 echo --------------------------------------------
 echo   Starting DyRec server...
 echo --------------------------------------------
 echo.
-echo [%date% %time%] Starting DyRec server... >> "%LOG_FILE%"
+echo [%date% %time%] Starting server... >> "%LOG_FILE%"
 
 REM Check if server.js exists
 if not exist "server.js" (
     echo [ERROR] server.js not found!
     echo [ERROR] server.js not found! >> "%LOG_FILE%"
-    echo Please make sure you are in the correct directory.
+    echo Please make sure you are running this script from the DyRec directory.
     pause
     exit /b 1
 )
+
+echo [INFO] Running: node server.js
+echo [INFO] Running: node server.js >> "%LOG_FILE%"
+echo.
 
 REM Set environment variables
 set NODE_ENV=production
 set PORT=5000
 
-REM Start the server in background and open browser
-echo [INFO] Server starting on http://localhost:5000
-echo [INFO] Opening browser...
-echo [INFO] Server starting on http://localhost:5000 >> "%LOG_FILE%"
-start "" http://localhost:5000
-
-REM Wait a moment for browser to open
-timeout /t 2 /nobreak >nul
-
-REM Auto-check and install dependencies via API (in background)
-echo [INFO] Starting background dependency check...
-echo [INFO] Starting background dependency check... >> "%LOG_FILE%"
-start /b cmd /c "timeout /t 5 /nobreak >nul && curl -s -X POST http://localhost:5000/api/dependencies -H \"Content-Type: application/json\" -d \"{\\\"action\\\":\\\"auto\\\"}\" >nul 2>&1"
-
+REM Start server and capture output
+echo [%date% %time%] Server starting... >> "%LOG_FILE%"
 echo.
-echo [INFO] DyRec is running at http://localhost:5000
-echo [INFO] Press Ctrl+C to stop the server
-echo.
-echo [INFO] Logs are saved to: %LOG_FILE%
+echo Server is starting on http://localhost:5000
+echo Press Ctrl+C to stop the server
 echo.
 
-REM Start server and redirect output to log file
-echo [%date% %time%] Server started >> "%LOG_FILE%"
-echo [INFO] Starting node server.js...
-node server.js >> "%LOG_FILE%" 2>> "%ERROR_FILE%"
+REM Start server with output to both console and log
+node server.js >> "%LOG_FILE%" 2>> "%ERROR_LOG%"
 
-REM If server exits, log it
+REM If server exits, show message
 echo.
-echo [%date% %time%] Server stopped >> "%LOG_FILE%"
+echo [%date% %time%] Server exited with code: %errorlevel% >> "%LOG_FILE%"
 echo.
-echo [INFO] Server stopped
-echo [INFO] Check logs at: %LOG_FILE%
-echo [INFO] Check errors at: %ERROR_FILE%
+echo ============================================
+echo   Server stopped
+echo ============================================
 echo.
-echo If startup failed, please share the log files for debugging.
+echo Log file: %LOG_FILE%
+echo Error log: %ERROR_LOG%
 echo.
-pause
+echo Press any key to exit...
+pause >nul
