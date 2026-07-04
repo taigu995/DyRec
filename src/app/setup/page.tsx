@@ -101,41 +101,15 @@ export default function SetupPage() {
         setDependencies(result.data);
       }
     } else {
-      // Web 环境：模拟检测（通过 API）
+      // Web 环境：使用 API 检测
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch('/api/dependencies');
         const data = await res.json();
-        const ffmpegAvailable = data.data?.ffmpegAvailable ?? false;
-        const ffmpegVersion = data.data?.ffmpegVersion ?? null;
-
-        setDependencies([
-          {
-            name: 'FFmpeg',
-            status: ffmpegAvailable ? 'installed' : 'not_installed',
-            version: ffmpegVersion,
-            path: ffmpegAvailable ? 'system' : null,
-            source: ffmpegAvailable ? 'system' : null,
-            description: ffmpegAvailable ? '录制功能已就绪' : '录制功能需要 FFmpeg',
-          },
-          {
-            name: 'Node.js',
-            status: 'installed',
-            version: '内置于 Electron',
-            path: null,
-            source: 'bundled',
-            description: '运行时环境正常',
-            optional: true,
-          },
-          {
-            name: '网络连接',
-            status: 'installed',
-            version: null,
-            path: null,
-            source: null,
-            description: '网络正常',
-            optional: true,
-          },
-        ]);
+        if (data.success) {
+          setDependencies(data.data);
+        } else {
+          throw new Error(data.error || '检测失败');
+        }
       } catch {
         setDependencies([
           {
@@ -160,11 +134,6 @@ export default function SetupPage() {
 
   // 安装 FFmpeg
   const handleInstallFFmpeg = async () => {
-    if (!window.electronAPI?.deps?.installFFmpeg) {
-      setInstallError('当前环境不支持自动安装，请手动安装 FFmpeg');
-      return;
-    }
-
     setIsInstalling(true);
     setInstallError(null);
     setInstallProgress({ stage: 'preparing', percent: 0, message: '准备安装...' });
@@ -175,15 +144,34 @@ export default function SetupPage() {
     );
 
     try {
-      const result = await window.electronAPI.deps.installFFmpeg();
-      if (result.success) {
-        // 重新检测
-        await runCheck();
+      if (window.electronAPI?.deps?.installFFmpeg) {
+        // Electron 环境
+        const result = await window.electronAPI.deps.installFFmpeg();
+        if (result.success) {
+          await runCheck();
+        } else {
+          setInstallError(result.error || '安装失败');
+          setDependencies((prev) =>
+            prev.map((dep) => (dep.name === 'FFmpeg' ? { ...dep, status: 'failed' as const } : dep))
+          );
+        }
       } else {
-        setInstallError(result.error || '安装失败');
-        setDependencies((prev) =>
-          prev.map((dep) => (dep.name === 'FFmpeg' ? { ...dep, status: 'failed' as const } : dep))
-        );
+        // Web 环境：使用 API 安装
+        const res = await fetch('/api/dependencies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'auto' }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setInstallProgress({ stage: 'complete', percent: 100, message: '安装完成' });
+          await runCheck();
+        } else {
+          setInstallError(data.error || '安装失败');
+          setDependencies((prev) =>
+            prev.map((dep) => (dep.name === 'FFmpeg' ? { ...dep, status: 'failed' as const } : dep))
+          );
+        }
       }
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : '安装失败');
