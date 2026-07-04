@@ -22,19 +22,12 @@ export async function POST(request: NextRequest) {
     // 获取直播间信息
     const roomInfo = await fetchRoomInfo(url.trim());
 
-    if (!roomInfo) {
-      return NextResponse.json(
-        { success: false, error: '无法获取直播间信息，请检查房间号是否正确' },
-        { status: 404 }
-      );
-    }
-
     // 返回预览信息
     const roomData = roomInfo.roomData;
     if (!roomData) {
       return NextResponse.json({
         success: false,
-        error: '无法获取直播间信息',
+        error: '无法获取直播间信息，请检查房间号是否正确',
       });
     }
 
