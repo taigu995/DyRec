@@ -29,16 +29,6 @@ if %errorlevel% neq 0 (
     echo [OK] FFmpeg found
 )
 
-REM Always install dependencies to ensure completeness
-echo.
-echo [INFO] Checking dependencies...
-call npm install --production 2>nul
-if %errorlevel% neq 0 (
-    echo [WARN] Some dependencies may be missing, trying to continue...
-) else (
-    echo [OK] Dependencies ready
-)
-
 echo.
 echo --------------------------------------------
 echo   Starting DyRec server...
@@ -55,5 +45,9 @@ node server.js
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Server failed to start
+    echo.
+    echo If you see module not found errors, run:
+    echo   npm install
+    echo.
     pause
 )
