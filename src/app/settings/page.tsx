@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Save,
   CheckCircle,
@@ -367,12 +368,42 @@ export default function SettingsPage() {
             <Label className="text-xs text-zinc-500">
               保存目录
             </Label>
-            <Input
-              value={settings.outputDir}
-              onChange={(e) => updateField('outputDir', e.target.value)}
-              placeholder="./recordings"
-              className="border-zinc-700 bg-zinc-800 font-mono text-sm text-zinc-200 placeholder:text-zinc-600"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={settings.outputDir}
+                onChange={(e) => updateField('outputDir', e.target.value)}
+                placeholder="./recordings"
+                className="flex-1 border-zinc-700 bg-zinc-800 font-mono text-sm text-zinc-200 placeholder:text-zinc-600"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/browse', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ initialPath: settings.outputDir }),
+                    });
+                    const data = await res.json();
+                    if (data.success && data.data?.path) {
+                      updateField('outputDir', data.data.path);
+                    } else if (data.error && !data.error.includes('取消')) {
+                      toast(data.error);
+                    }
+                  } catch {
+                    toast('浏览文件夹失败');
+                  }
+                }}
+                className="border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+              >
+                <FolderOpen className="h-4 w-4 mr-1" />
+                浏览
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-500">
+              录制文件按主播名称分文件夹存储，格式：[主播名称][年-月-日-时-分-秒]
+            </p>
           </div>
 
           <Separator className="bg-zinc-800" />

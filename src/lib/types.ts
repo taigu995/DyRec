@@ -56,6 +56,14 @@ export interface RecordingTask {
   streamUrl: string | null;
   /** 分段序号 */
   segmentIndex: number;
+  /** 主播昵称 */
+  nickname?: string;
+  /** 输出目录 */
+  outputDir?: string;
+  /** 是否自动重启录制 */
+  autoRestart?: boolean;
+  /** 是否正在停止中（内部使用） */
+  stopping?: boolean;
 }
 
 /** 录制历史 */

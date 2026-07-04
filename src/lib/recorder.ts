@@ -2,14 +2,30 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { RecordingTask, AppSettings } from './types';
+import { fetchRoomInfo, getBestStreamUrl } from './douyin';
 
 // ============================================================
 // FFmpeg 录制管理器
 // 管理录制进程的启动、停止、状态监控
+// 支持断线自动重录
 // ============================================================
 
 /** 活跃的录制进程 */
 const activeProcesses = new Map<string, ChildProcess>();
+
+/** 用户主动停止的任务（不触发自动重录） */
+const userStoppedTasks = new Set<string>();
+
+/** 自动重录回调 */
+type AutoRestartCallback = (taskId: string, roomId: string) => Promise<void>;
+let autoRestartCallback: AutoRestartCallback | null = null;
+
+/**
+ * 设置自动重录回调
+ */
+export function setAutoRestartCallback(callback: AutoRestartCallback | null): void {
+  autoRestartCallback = callback;
+}
 
 /**
  * 生成 FFmpeg 录制命令参数
@@ -108,9 +124,41 @@ export function startRecording(
       activeProcesses.delete(task.id);
     });
 
-    proc.on('close', (code: number | null) => {
+    proc.on('close', async (code: number | null) => {
       console.log(`[Recorder] 录制结束 [${task.id}], 退出码: ${code}`);
       activeProcesses.delete(task.id);
+      
+      // 自动重录：如果录制非正常结束（非用户手动停止）且退出码非0，检查是否继续录制
+      if (code !== 0 && code !== null && !task.stopping) {
+        console.log(`[Recorder] 录制异常中断，检查直播间状态...`);
+        try {
+          const roomInfo = await fetchRoomInfo(task.roomId);
+          
+          if (roomInfo && roomInfo.isLive) {
+            console.log(`[Recorder] 主播仍在直播，3秒后自动重新录制...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // 重新获取流地址并启动录制
+            const flvUrl = getBestStreamUrl(roomInfo.streamUrls?.flv || {}, 'origin');
+            const hlsUrl = getBestStreamUrl(roomInfo.streamUrls?.hls || {}, 'origin');
+            const streamUrl = flvUrl || hlsUrl;
+            
+            if (streamUrl) {
+              task.streamUrl = streamUrl;
+              task.startedAt = Date.now();
+              task.outputPath = generateOutputPath(settings.outputDir, task.roomName, settings.defaultFormat);
+              console.log(`[Recorder] 自动重新录制 [${task.id}]`);
+              startRecording(task, streamUrl, settings);
+            } else {
+              console.log(`[Recorder] 无法获取流地址，停止自动重录`);
+            }
+          } else {
+            console.log(`[Recorder] 主播已下播，停止录制`);
+          }
+        } catch (err) {
+          console.error(`[Recorder] 自动重录检查失败:`, err);
+        }
+      }
     });
 
     // 捕获 stderr 用于日志
@@ -129,13 +177,16 @@ export function startRecording(
 }
 
 /**
- * 停止录制任务
+ * 停止录制任务（用户主动停止，不触发自动重录）
  */
 export function stopRecording(taskId: string): boolean {
   const proc = activeProcesses.get(taskId);
   if (!proc) {
     return false;
   }
+
+  // 标记为用户主动停止
+  userStoppedTasks.add(taskId);
 
   try {
     // 发送 SIGINT 让 FFmpeg 正常结束并写入文件头
@@ -147,11 +198,13 @@ export function stopRecording(taskId: string): boolean {
         proc.kill('SIGKILL');
         activeProcesses.delete(taskId);
       }
+      userStoppedTasks.delete(taskId);
     }, 5000);
 
     return true;
   } catch {
     activeProcesses.delete(taskId);
+    userStoppedTasks.delete(taskId);
     return false;
   }
 }
