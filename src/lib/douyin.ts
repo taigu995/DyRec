@@ -23,6 +23,7 @@ const DEFAULT_HEADERS: Record<string, string> = {
  * - https://v.douyin.com/iQFeBnt/ (短链接)
  * - https://www.douyin.com/user/xxx (用户主页)
  * - 纯数字房间号
+ * - 抖音分享文本（包含短链接的完整分享信息）
  */
 export function extractRoomId(input: string): string {
   const trimmed = input.trim();
@@ -36,6 +37,13 @@ export function extractRoomId(input: string): string {
   const standardMatch = trimmed.match(/live\.douyin\.com\/(\d+)/);
   if (standardMatch) {
     return standardMatch[1];
+  }
+
+  // 从分享文本中提取短链接
+  // 格式: https://v.douyin.com/xxxxx/
+  const shortUrlMatch = trimmed.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9]+\/?/);
+  if (shortUrlMatch) {
+    return shortUrlMatch[0];
   }
 
   // 短链接需要重定向解析 (此处返回原始输入，由调用方处理)
