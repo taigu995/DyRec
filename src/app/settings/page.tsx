@@ -389,10 +389,11 @@ export default function SettingsPage() {
                     if (data.success && data.data?.path) {
                       updateField('outputDir', data.data.path);
                     } else if (data.error && !data.error.includes('取消')) {
-                      toast(data.error);
+                      // 显示提示信息
+                      alert(data.error);
                     }
                   } catch {
-                    toast('浏览文件夹失败');
+                    alert('浏览文件夹失败，请手动输入路径');
                   }
                 }}
                 className="border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"

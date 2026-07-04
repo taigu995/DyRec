@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * POST /api/browse - 浏览文件夹
  * Electron 环境：打开系统文件夹选择对话框
- * Web 环境：返回错误提示
+ * Web 环境：返回提示信息
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Web 环境：返回提示
     return NextResponse.json({
       success: false,
-      error: 'Web 环境不支持文件夹浏览，请手动输入路径',
+      error: '当前为 Web 模式，请手动输入保存目录路径（如 ./recordings 或 D:/recordings）',
       isElectron: false,
     });
   } catch (error) {
