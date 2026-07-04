@@ -1,6 +1,6 @@
 @echo off
-chcp 65001 >nul 2>&1
-title DyRec - Build Windows EXE
+chcp 65001 >nul
+setlocal enabledelayedexpansion
 
 echo ============================================
 echo   DyRec - Build Windows EXE Installer
@@ -8,71 +8,76 @@ echo ============================================
 echo.
 
 REM Check Node.js
-where node >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
+where node >nul 2>nul
+if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found!
-    echo Please install Node.js 20+ from https://nodejs.org/zh-cn
+    echo Please install Node.js from https://nodejs.org/
     pause
     exit /b 1
 )
+for /f "tokens=*" %%i in ('node -v') do set NODE_VERSION=%%i
+echo [OK] Node.js found: %NODE_VERSION%
 
 REM Check pnpm
-where pnpm >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [INFO] Installing pnpm...
+where pnpm >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [WARN] pnpm not found, installing...
     npm install -g pnpm
 )
 
-echo [OK] Node.js and pnpm found
 echo.
-
-REM Navigate to project directory
-cd /d "%~dp0\.."
-
-REM Clean node_modules to avoid package manager conflicts
-echo [0/4] Cleaning previous dependencies...
+echo --------------------------------------------
+echo   [1/4] Cleaning old files...
+echo --------------------------------------------
 if exist node_modules rmdir /s /q node_modules
 if exist .next rmdir /s /q .next
-if exist pnpm-lock.yaml del /q pnpm-lock.yaml
+if exist dist-electron rmdir /s /q dist-electron
+if exist pnpm-lock.yaml del /f pnpm-lock.yaml
+echo [OK] Cleaned old files
 
-echo [1/4] Installing dependencies...
-call pnpm install --no-frozen-lockfile
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Failed to install dependencies
+echo.
+echo --------------------------------------------
+echo   [2/4] Installing dependencies...
+echo --------------------------------------------
+pnpm install --no-frozen-lockfile
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to install dependencies!
+    pause
+    exit /b 1
+)
+echo [OK] Dependencies installed
+
+echo.
+echo --------------------------------------------
+echo   [3/4] Building Next.js...
+echo --------------------------------------------
+pnpm build
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to build Next.js!
+    pause
+    exit /b 1
+)
+echo [OK] Next.js built
+
+echo.
+echo --------------------------------------------
+echo   [4/4] Building EXE installer...
+echo --------------------------------------------
+npx electron-builder --win --x64
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to build EXE!
     pause
     exit /b 1
 )
 
 echo.
-echo [2/4] Building Next.js app...
-call pnpm build
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Build failed
-    pause
-    exit /b 1
-)
-
-echo.
-echo [3/4] Packaging Electron app (this may take 5-10 minutes)...
-call npx electron-builder --win portable --x64
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Packaging failed
-    pause
-    exit /b 1
-)
-
-echo.
-echo [4/4] Build complete!
-echo.
 echo ============================================
-echo   Output files:
-echo ============================================
-echo   dist-electron\DyRec.exe (portable)
-echo   dist-electron\DyRec-1.0.0-Setup.exe (installer)
+echo   Build completed!
 echo ============================================
 echo.
-
-REM Open output directory
-explorer dist-electron
-
+echo EXE installer location:
+echo   dist-electron\DyRec-*-Setup.exe
+echo.
+echo You can now install DyRec on Windows 10!
+echo.
 pause
