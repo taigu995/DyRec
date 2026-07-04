@@ -16,6 +16,8 @@ import {
   Settings2,
   Monitor,
   Video,
+  RefreshCw,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +48,10 @@ export default function LivePreviewPage() {
   const [showGifts, setShowGifts] = useState(true);
   const [danmakuEnabled, setDanmakuEnabled] = useState(true);
   const [isCanvasRecording, setIsCanvasRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedFilename, setRecordedFilename] = useState<string>('');
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertStatus, setConvertStatus] = useState<string>('');
   const chatListRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -55,8 +61,27 @@ export default function LivePreviewPage() {
     enabled: danmakuEnabled,
   });
 
+  // 处理录制完成后的回调
+  const handleRecordingComplete = useCallback((blob: Blob, filename: string) => {
+    setRecordedBlob(blob);
+    setRecordedFilename(filename);
+    
+    // 检查是否需要自动转换
+    if (room?.autoConvert && room.convertFormat) {
+      convertVideo(blob, filename, room.convertFormat);
+    } else {
+      // 默认下载
+      downloadBlob(blob, filename);
+    }
+  }, [room?.autoConvert, room?.convertFormat]);
+
   // Canvas 录制 hook (录制包含弹幕+礼物的画面)
-  const canvasRecorder = useCanvasRecorder(720, 1280, 30);
+  const canvasRecorder = useCanvasRecorder({
+    width: 720,
+    height: 1280,
+    fps: 30,
+    onRecordingComplete: handleRecordingComplete,
+  });
 
   // 同步视频元素到 Canvas 录制器
   useEffect(() => {
@@ -70,6 +95,88 @@ export default function LivePreviewPage() {
       canvasRecorder.processGifts(messages as GiftMessage[]);
     }
   }, [messages, isCanvasRecording, canvasRecorder]);
+
+  // 下载 Blob 到本地
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // 转换视频格式
+  const convertVideo = async (blob: Blob, filename: string, format: string) => {
+    setIsConverting(true);
+    setConvertStatus('正在上传视频...');
+    
+    try {
+      // 上传文件到服务器
+      const formData = new FormData();
+      formData.append('file', blob, filename);
+      
+      const uploadRes = await fetch('/api/convert/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        throw new Error(uploadData.error || '上传失败');
+      }
+      
+      setConvertStatus('正在转换格式...');
+      
+      // 调用转换 API
+      const convertRes = await fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputPath: uploadData.data.path,
+          format,
+          deleteOriginal: true,
+        }),
+      });
+      
+      const convertData = await convertRes.json();
+      if (!convertData.success) {
+        throw new Error(convertData.error || '转换失败');
+      }
+      
+      setConvertStatus('转换完成，正在下载...');
+      
+      // 下载转换后的文件
+      const downloadRes = await fetch(`/api/convert/download?path=${encodeURIComponent(convertData.data.outputPath)}`);
+      const convertedBlob = await downloadRes.blob();
+      const ext = format.toLowerCase();
+      const newFilename = filename.replace(/\.webm$/, `.${ext}`);
+      downloadBlob(convertedBlob, newFilename);
+      
+      setConvertStatus('');
+    } catch (error) {
+      console.error('转换失败:', error);
+      setConvertStatus(`转换失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      // 转换失败时下载原文件
+      downloadBlob(blob, filename);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  // 手动转换已录制的视频
+  const handleManualConvert = async () => {
+    if (!recordedBlob || !room?.convertFormat) return;
+    await convertVideo(recordedBlob, recordedFilename, room.convertFormat);
+  };
+
+  // 手动下载已录制的视频
+  const handleManualDownload = () => {
+    if (!recordedBlob) return;
+    downloadBlob(recordedBlob, recordedFilename);
+  };
 
   // 获取房间信息
   const fetchRoomInfo = useCallback(async () => {

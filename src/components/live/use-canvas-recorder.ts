@@ -32,9 +32,19 @@ function getGiftColor(diamondCount: number): string {
   return '#22c55e';
 }
 
-export function useCanvasRecorder(width = 720, height = 1280, fps = 30) {
+export interface CanvasRecorderOptions {
+  width?: number;
+  height?: number;
+  fps?: number;
+  onRecordingComplete?: (blob: Blob, filename: string) => void;
+}
+
+export function useCanvasRecorder(options: CanvasRecorderOptions = {}) {
+  const { width = 720, height = 1280, fps = 30, onRecordingComplete } = options;
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [lastRecordedBlob, setLastRecordedBlob] = useState<Blob | null>(null);
+  const [lastRecordedFilename, setLastRecordedFilename] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -319,18 +329,33 @@ export function useCanvasRecorder(width = 720, height = 1280, fps = 30) {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const timestamp = new Date()
         .toISOString()
         .replace(/[:.]/g, '-')
         .slice(0, 19);
-      a.href = url;
-      a.download = `dyrec_${timestamp}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `dyrec_${timestamp}.webm`;
+      
+      // Store the blob for potential conversion
+      setLastRecordedBlob(blob);
+      setLastRecordedFilename(filename);
+      
+      // Call the callback if provided
+      if (onRecordingComplete) {
+        onRecordingComplete(blob, filename);
+      } else {
+        // Default behavior: download the file
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      
+      // Clear chunks for next recording
+      chunksRef.current = [];
     };
 
     recorder.start(1000);
@@ -340,7 +365,7 @@ export function useCanvasRecorder(width = 720, height = 1280, fps = 30) {
     durationTimerRef.current = setInterval(() => {
       setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
     }, 1000);
-  }, [width, height, fps]);
+  }, [width, height, fps, onRecordingComplete]);
 
   // 停止录制
   const stopRecording = useCallback(() => {
@@ -368,5 +393,7 @@ export function useCanvasRecorder(width = 720, height = 1280, fps = 30) {
     processDanmaku,
     processGifts,
     setVideoElement,
+    lastRecordedBlob,
+    lastRecordedFilename,
   };
 }

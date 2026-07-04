@@ -73,6 +73,8 @@ export async function POST(
       autoRecord: true,
       quality: (quality as LiveRoom['quality']) || 'origin',
       recordMode: (body.recordMode as LiveRoom['recordMode']) || 'original',
+      autoConvert: false,
+      convertFormat: 'mp4',
       createdAt: Date.now(),
       lastCheckedAt: Date.now(),
       title: roomInfo.title,

@@ -5,6 +5,9 @@
 /** 录制模式 */
 export type RecordingMode = 'composite' | 'original' | 'both';
 
+/** 视频格式 */
+export type VideoFormat = 'webm' | 'mp4' | 'mkv' | 'flv';
+
 /** 直播间信息 */
 export interface LiveRoom {
   id: string;
@@ -20,6 +23,10 @@ export interface LiveRoom {
   quality: 'origin' | 'uhd' | 'hd' | 'sd';
   /** 录制模式: composite=合成录制, original=原始流录制, both=两者同步 */
   recordMode: RecordingMode;
+  /** 合成录制完成后自动转换格式 */
+  autoConvert: boolean;
+  /** 转换目标格式 */
+  convertFormat: VideoFormat;
   /** 添加时间 */
   createdAt: number;
   /** 最后检测时间 */

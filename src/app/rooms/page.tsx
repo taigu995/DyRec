@@ -50,6 +50,8 @@ export default function RoomsPage() {
   const [editRecordMode, setEditRecordMode] = useState<RecordingMode>('original');
   const [editQuality, setEditQuality] = useState<string>('origin');
   const [editAutoRecord, setEditAutoRecord] = useState(false);
+  const [editAutoConvert, setEditAutoConvert] = useState(false);
+  const [editConvertFormat, setEditConvertFormat] = useState<'mp4' | 'mkv' | 'flv'>('mp4');
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -171,6 +173,8 @@ export default function RoomsPage() {
     setEditRecordMode(room.recordMode || 'original');
     setEditQuality(room.quality || 'origin');
     setEditAutoRecord(room.autoRecord || false);
+    setEditAutoConvert(room.autoConvert || false);
+    setEditConvertFormat((room.convertFormat as 'mp4' | 'mkv' | 'flv') || 'mp4');
     setEditDialogOpen(true);
   };
 
@@ -186,6 +190,8 @@ export default function RoomsPage() {
             recordMode: editRecordMode,
             quality: editQuality,
             autoRecord: editAutoRecord,
+            autoConvert: editAutoConvert,
+            convertFormat: editConvertFormat,
           },
         }),
       });
@@ -611,6 +617,45 @@ export default function RoomsPage() {
                 {editAutoRecord ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
               </Button>
             </div>
+            {(editRecordMode === 'composite' || editRecordMode === 'both') && (
+              <>
+                <div className="flex items-center justify-between rounded-lg border border-zinc-700 p-3">
+                  <div>
+                    <p className="text-sm text-zinc-200">自动转换格式</p>
+                    <p className="text-xs text-zinc-500">合成录制完成后自动转换格式</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditAutoConvert(!editAutoConvert)}
+                    className={editAutoConvert ? 'text-cyan-400' : 'text-zinc-500'}
+                  >
+                    {editAutoConvert ? <CircleDot className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                  </Button>
+                </div>
+                {editAutoConvert && (
+                  <div className="space-y-2">
+                    <label className="text-sm text-zinc-400">转换目标格式</label>
+                    <Select
+                      value={editConvertFormat}
+                      onValueChange={(v) => setEditConvertFormat(v as 'mp4' | 'mkv' | 'flv')}
+                    >
+                      <SelectTrigger className="border-zinc-700 bg-zinc-800 text-zinc-100">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-800">
+                        <SelectItem value="mp4">MP4 (推荐)</SelectItem>
+                        <SelectItem value="mkv">MKV</SelectItem>
+                        <SelectItem value="flv">FLV</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-zinc-500">
+                      转换需要 FFmpeg，转换完成后原 WebM 文件将被删除
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
             <Button
               className="w-full bg-cyan-600 hover:bg-cyan-700"
               onClick={saveRoomSettings}
