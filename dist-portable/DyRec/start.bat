@@ -54,7 +54,11 @@ REM Set environment variables
 set NODE_ENV=production
 set PORT=5000
 
-REM Start the server
+REM Start the server in background and open browser
+echo [INFO] Server starting on http://localhost:5000
+echo [INFO] Opening browser...
+start "" http://localhost:5000
+
 node server.js
 
 if %errorlevel% neq 0 (
