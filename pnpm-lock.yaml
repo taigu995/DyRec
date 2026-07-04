@@ -167,6 +167,9 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      styled-jsx:
+        specifier: ^5.1.6
+        version: 5.1.6(@babel/core@7.28.6)(react@19.2.3)
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.0
