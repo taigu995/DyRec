@@ -35,7 +35,7 @@ echo --------------------------------------------
 echo.
 
 REM Install dependencies using Chinese mirror
-call npm install --production --registry=https://registry.npmmirror.com --no-audit --no-fund --loglevel=error
+call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund --loglevel=error
 
 if %errorlevel% neq 0 (
     echo.
