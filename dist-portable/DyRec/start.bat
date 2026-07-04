@@ -21,7 +21,12 @@ echo [INFO] Log file: %LOG_FILE%
 echo [INFO] Error log: %ERROR_FILE%
 echo.
 
+REM Initialize log file
+echo [%date% %time%] DyRec Startup Log > "%LOG_FILE%"
+echo [%date% %time%] Working directory: %CD% >> "%LOG_FILE%"
+
 REM Check Node.js
+echo [INFO] Checking Node.js...
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found! >> "%LOG_FILE%"
@@ -37,6 +42,7 @@ echo [OK] Node.js found: %NODE_VERSION%
 echo [OK] Node.js found: %NODE_VERSION% >> "%LOG_FILE%"
 
 REM Check FFmpeg
+echo [INFO] Checking FFmpeg...
 where ffmpeg >nul 2>nul
 if %errorlevel% neq 0 (
     if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
@@ -60,15 +66,26 @@ echo --------------------------------------------
 echo.
 echo [%date% %time%] Installing dependencies... >> "%LOG_FILE%"
 
+REM Check if node_modules exists
+if not exist "node_modules" (
+    echo [INFO] node_modules not found, installing...
+    echo [INFO] node_modules not found, installing... >> "%LOG_FILE%"
+)
+
 REM Install dependencies using Chinese mirror
+echo [INFO] Running: npm install --production --legacy-peer-deps
+echo [INFO] Running: npm install --production --legacy-peer-deps >> "%LOG_FILE%"
 call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund >> "%LOG_FILE%" 2>&1
 
 if %errorlevel% neq 0 (
     echo.
-    echo [WARN] Dependency installation failed
-    echo [WARN] Dependency installation failed >> "%LOG_FILE%"
+    echo [WARN] Dependency installation failed with error code: %errorlevel%
+    echo [WARN] Dependency installation failed with error code: %errorlevel% >> "%LOG_FILE%"
     echo       You can try running: npm install --production
     echo.
+) else (
+    echo [OK] Dependencies installed successfully
+    echo [OK] Dependencies installed successfully >> "%LOG_FILE%"
 )
 
 echo.
@@ -77,6 +94,15 @@ echo   Starting DyRec server...
 echo --------------------------------------------
 echo.
 echo [%date% %time%] Starting DyRec server... >> "%LOG_FILE%"
+
+REM Check if server.js exists
+if not exist "server.js" (
+    echo [ERROR] server.js not found!
+    echo [ERROR] server.js not found! >> "%LOG_FILE%"
+    echo Please make sure you are in the correct directory.
+    pause
+    exit /b 1
+)
 
 REM Set environment variables
 set NODE_ENV=production
@@ -92,9 +118,10 @@ REM Wait a moment for browser to open
 timeout /t 2 /nobreak >nul
 
 REM Auto-check and install dependencies via API (in background)
+echo [INFO] Starting background dependency check...
+echo [INFO] Starting background dependency check... >> "%LOG_FILE%"
 start /b cmd /c "timeout /t 5 /nobreak >nul && curl -s -X POST http://localhost:5000/api/dependencies -H \"Content-Type: application/json\" -d \"{\\\"action\\\":\\\"auto\\\"}\" >nul 2>&1"
 
-echo [INFO] Checking dependencies in background...
 echo.
 echo [INFO] DyRec is running at http://localhost:5000
 echo [INFO] Press Ctrl+C to stop the server
@@ -104,6 +131,7 @@ echo.
 
 REM Start server and redirect output to log file
 echo [%date% %time%] Server started >> "%LOG_FILE%"
+echo [INFO] Starting node server.js...
 node server.js >> "%LOG_FILE%" 2>> "%ERROR_FILE%"
 
 REM If server exits, log it
