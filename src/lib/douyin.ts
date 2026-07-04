@@ -57,17 +57,62 @@ export function extractRoomId(input: string): string {
  */
 export async function resolveShortUrl(shortUrl: string): Promise<string> {
   try {
-    const response = await fetch(shortUrl, {
-      method: 'HEAD',
-      redirect: 'follow',
-      headers: DEFAULT_HEADERS,
-    });
-    const finalUrl = response.url;
-    const match = finalUrl.match(/live\.douyin\.com\/(\d+)/);
+    // 确保 URL 有协议
+    let url = shortUrl.trim();
+    if (!url.startsWith('http')) {
+      url = 'https://' + url;
+    }
+
+    // 尝试 HEAD 请求获取重定向后的 URL
+    let finalUrl = '';
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        redirect: 'follow',
+        headers: DEFAULT_HEADERS,
+      });
+      finalUrl = response.url;
+    } catch {
+      // HEAD 请求失败，尝试 GET 请求
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: DEFAULT_HEADERS,
+      });
+      finalUrl = response.url;
+    }
+
+    // 尝试多种模式匹配房间号
+    // 1. live.douyin.com/数字
+    let match = finalUrl.match(/live\.douyin\.com\/(\d+)/);
     if (match) {
       return match[1];
     }
-    throw new Error('无法从短链接中解析出房间号');
+
+    // 2. web_room_id 参数
+    try {
+      const urlObj = new URL(finalUrl);
+      const webRoomId = urlObj.searchParams.get('web_room_id');
+      if (webRoomId && /^\d+$/.test(webRoomId)) {
+        return webRoomId;
+      }
+
+      // 3. room_id 参数
+      const roomId = urlObj.searchParams.get('room_id');
+      if (roomId && /^\d+$/.test(roomId)) {
+        return roomId;
+      }
+    } catch {
+      // URL 解析失败，继续尝试其他方法
+    }
+
+    // 4. 路径中的数字 (如 /number)
+    const pathMatch = finalUrl.match(/\/(\d{6,})(?:[?/]|$)/);
+    if (pathMatch) {
+      return pathMatch[1];
+    }
+
+    throw new Error(`无法从短链接中解析出房间号，最终URL: ${finalUrl}`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : '未知错误';
     throw new Error(`解析短链接失败: ${msg}`);
