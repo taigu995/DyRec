@@ -1,51 +1,25 @@
-const path = require('path')
+const { createServer } = require('http')
+const { parse } = require('url')
+const next = require('next')
 
-const dir = path.join(__dirname)
+const port = parseInt(process.env.PORT, 10) || 5000
+const dev = false
 
-process.env.NODE_ENV = 'production'
-process.chdir(__dirname)
+const app = next({ dev, dir: __dirname })
+const handle = app.getRequestHandler()
 
-const currentPort = parseInt(process.env.PORT, 10) || 5000
-const hostname = process.env.HOSTNAME || '0.0.0.0'
-
-let keepAliveTimeout = parseInt(process.env.KEEP_ALIVE_TIMEOUT, 10)
-
-const nextConfig = {
-  distDir: './.next',
-  trailingSlash: false,
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*',
-        pathname: '/**',
-      },
-    ],
-  },
-}
-
-process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig)
-
-require('next')
-const { startServer } = require('next/dist/server/lib/start-server')
-
-if (
-  Number.isNaN(keepAliveTimeout) ||
-  !Number.isFinite(keepAliveTimeout) ||
-  keepAliveTimeout < 0
-) {
-  keepAliveTimeout = undefined
-}
-
-startServer({
-  dir,
-  isDev: false,
-  config: nextConfig,
-  hostname,
-  port: currentPort,
-  allowRetry: false,
-  keepAliveTimeout,
+app.prepare().then(() => {
+  createServer((req, res) => {
+    const parsedUrl = parse(req.url, true)
+    handle(req, res, parsedUrl)
+  }).listen(port, '0.0.0.0', (err) => {
+    if (err) {
+      console.error('Failed to start server:', err)
+      process.exit(1)
+    }
+    console.log(`> Ready on http://localhost:${port}`)
+  })
 }).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+  console.error('Failed to prepare Next.js:', err)
+  process.exit(1)
+})
