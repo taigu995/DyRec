@@ -34,8 +34,8 @@ export function extractRoomId(input: string): string {
     return trimmed;
   }
 
-  // 标准直播间 URL: https://live.douyin.com/745964462470
-  const standardMatch = trimmed.match(/live\.douyin\.com\/(\d+)/);
+  // 标准直播间 URL: https://live.douyin.com/745964462470 或 https://live.douyin.com/XYQYH2026
+  const standardMatch = trimmed.match(/live\.douyin\.com\/([A-Za-z0-9_]+)/);
   if (standardMatch) {
     return standardMatch[1];
   }
@@ -92,8 +92,8 @@ export async function resolveShortUrl(shortUrl: string): Promise<string> {
     }
 
     // 尝试多种模式匹配房间号
-    // 1. live.douyin.com/数字
-    let match = finalUrl.match(/live\.douyin\.com\/(\d+)/);
+    // 1. live.douyin.com/数字或字母数字混合
+    let match = finalUrl.match(/live\.douyin\.com\/([A-Za-z0-9_]+)/);
     if (match) {
       return match[1];
     }
@@ -115,8 +115,8 @@ export async function resolveShortUrl(shortUrl: string): Promise<string> {
       // URL 解析失败，继续尝试其他方法
     }
 
-    // 4. 路径中的数字 (如 /number)
-    const pathMatch = finalUrl.match(/\/(\d{6,})(?:[?/]|$)/);
+    // 4. 路径中的字母数字 (如 /XYQYH2026 或 /number)
+    const pathMatch = finalUrl.match(/\/([A-Za-z0-9_]{6,})(?:[?/]|$)/);
     if (pathMatch) {
       return pathMatch[1];
     }
