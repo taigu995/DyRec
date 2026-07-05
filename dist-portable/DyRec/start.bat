@@ -34,8 +34,8 @@ if not exist ".next" (
     exit /b 1
 )
 
-if not exist ".next\BUILD_ID" (
-    echo [ERROR] .next\BUILD_ID not found!
+if not exist ".nextBUILD_ID" (
+    echo [ERROR] .nextBUILD_ID not found!
     echo Please re-download and re-extract the ZIP file.
     echo.
     pause
@@ -65,7 +65,8 @@ echo.
 
 REM Install dependencies
 echo [INFO] Checking dependencies...
-if not exist "node_modules\next" (
+if not exist "node_modules
+ext" (
     echo [INFO] Installing dependencies (first run)...
     call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund
     if errorlevel 1 (
