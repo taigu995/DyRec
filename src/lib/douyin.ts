@@ -18,6 +18,64 @@ const DEFAULT_HEADERS: Record<string, string> = {
 };
 
 /**
+ * 生成随机的 msToken
+ * 参考 biliLive-tools: 182 位随机字符
+ */
+function generateMsToken(length = 182): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * 获取 ttwid cookie
+ * 通过访问抖音直播首页自动获取，不需要用户登录
+ * 参考 biliLive-tools 和 DouyinLiveWebFetcher 的实现
+ */
+async function getTtwid(): Promise<string | null> {
+  try {
+    const response = await fetch(DOUYIN_LIVE_URL, {
+      method: 'GET',
+      headers: {
+        'User-Agent': DEFAULT_HEADERS['User-Agent'],
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      redirect: 'follow',
+    });
+
+    // 从 Set-Cookie 头中提取 ttwid
+    const setCookie = response.headers.get('set-cookie');
+    if (setCookie) {
+      const match = setCookie.match(/ttwid=([^;]+)/);
+      if (match) {
+        logger.debug('douyin', 'Got ttwid from response');
+        return match[1];
+      }
+    }
+
+    // 某些环境下 set-cookie 可能不可访问，尝试从 cookies 属性获取
+    // @ts-expect-error - cookies 属性在某些 fetch 实现中存在
+    if (response.cookies) {
+      // @ts-expect-error - cookies 属性在某些 fetch 实现中存在
+      const ttwid = response.cookies.get?.('ttwid');
+      if (ttwid) {
+        logger.debug('douyin', 'Got ttwid from cookies');
+        return ttwid;
+      }
+    }
+
+    logger.warn('douyin', 'Failed to get ttwid from response');
+    return null;
+  } catch (error) {
+    logger.error('douyin', 'Error getting ttwid:', error instanceof Error ? error.message : 'unknown');
+    return null;
+  }
+}
+
+/**
  * 从 URL 中提取直播间 ID
  * 支持格式:
  * - https://live.douyin.com/745964462470
@@ -130,6 +188,7 @@ export async function resolveShortUrl(shortUrl: string): Promise<string> {
 
 /**
  * 获取直播间信息与流地址
+ * 参考 biliLive-tools: 不需要用户 Cookie，自动获取 ttwid
  */
 export async function fetchRoomInfo(
   webRid: string,
@@ -152,13 +211,31 @@ export async function fetchRoomInfo(
     browser_platform: 'Win32',
     browser_name: 'Chrome',
     browser_version: '120.0.0.0',
+    cookie_enabled: 'true',
+    screen_width: '1920',
+    screen_height: '1080',
     web_rid: webRid,
   });
 
   const headers: Record<string, string> = { ...DEFAULT_HEADERS };
+
+  // 构建 Cookie
+  // 优先使用用户提供的 Cookie，否则自动获取 ttwid
+  let cookieStr = '';
   if (cookie) {
-    headers['Cookie'] = cookie;
+    cookieStr = cookie;
+  } else {
+    // 自动获取 ttwid（参考 biliLive-tools）
+    const ttwid = await getTtwid();
+    const msToken = generateMsToken();
+    if (ttwid) {
+      cookieStr = `ttwid=${ttwid}; msToken=${msToken}; __ac_nonce=${generateMsToken(21)}`;
+    } else {
+      // 即使获取不到 ttwid，也尝试发送请求（可能成功）
+      cookieStr = `msToken=${msToken}; __ac_nonce=${generateMsToken(21)}`;
+    }
   }
+  headers['Cookie'] = cookieStr;
 
   const url = `${DOUYIN_API_URL}?${params.toString()}`;
 
@@ -176,7 +253,19 @@ export async function fetchRoomInfo(
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const json = (await response.json()) as DouyinApiResponse;
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      logger.error('douyin', 'Empty response body');
+      throw new Error('Empty response - API may require valid cookies');
+    }
+
+    let json: DouyinApiResponse;
+    try {
+      json = JSON.parse(text) as DouyinApiResponse;
+    } catch {
+      logger.error('douyin', 'Failed to parse JSON response:', text.substring(0, 200));
+      throw new Error('Invalid JSON response');
+    }
 
     // 调试日志
     logger.debug('douyin', 'API response', { status_code: json.status_code, data: JSON.stringify(json).substring(0, 500) });
