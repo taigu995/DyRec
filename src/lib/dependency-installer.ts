@@ -275,16 +275,20 @@ function findSystemFFmpeg(): string | null {
   try {
     const { execSync } = require('child_process');
     const cmd = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
+    console.log(`[findSystemFFmpeg] Running: ${cmd}`);
     const result = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    console.log(`[findSystemFFmpeg] Result: ${result || 'empty'}`);
     if (result) {
       // where 命令可能返回多行，取第一行
       const firstPath = result.split(/[\r\n]+/)[0].trim();
       if (firstPath && fs.existsSync(firstPath)) {
+        console.log(`[findSystemFFmpeg] Found: ${firstPath}`);
         return firstPath;
       }
     }
-  } catch {
+  } catch (e) {
     // ffmpeg 不在 PATH 中，忽略
+    console.log(`[findSystemFFmpeg] Error: ${e instanceof Error ? e.message : 'unknown'}`);
   }
 
   return null;
@@ -294,8 +298,12 @@ function findSystemFFmpeg(): string | null {
  * 检测 FFmpeg
  */
 export function checkFFmpeg(): DepResult {
+  console.log(`[checkFFmpeg] Platform: ${process.platform}`);
+  console.log(`[checkFFmpeg] DYREC_FFMPEG_PATH: ${process.env.DYREC_FFMPEG_PATH || 'not set'}`);
+  
   // 1. 检查自定义路径（用户手动设置）
   const customPath = getCustomFFmpegPath();
+  console.log(`[checkFFmpeg] Custom path: ${customPath || 'none'}`);
   if (customPath) {
     let customExePath = customPath;
     try {
@@ -692,16 +700,22 @@ export async function installFFmpeg(onProgress?: (info: ProgressInfo) => void): 
   const arch = process.arch;
   const depsDir = getDepsDir();
 
+  console.log(`[DepInstaller] Platform: ${platform}, Arch: ${arch}`);
+  console.log(`[DepInstaller] DepsDir: ${depsDir}`);
+
   if (onProgress) onProgress({ stage: 'downloading', percent: 0, message: '准备下载 FFmpeg...' });
 
   // 确定下载源列表
   let sources: FFmpegSource[] = [];
   if (platform === 'win32') {
     sources = FFMPEG_SOURCES.win64;
+    console.log(`[DepInstaller] Using Windows sources: ${sources.length} sources`);
   } else if (platform === 'darwin') {
     sources = arch === 'arm64' ? FFMPEG_SOURCES.darwin_arm : FFMPEG_SOURCES.darwin_x64;
+    console.log(`[DepInstaller] Using macOS sources: ${sources.length} sources`);
   } else if (platform === 'linux') {
     sources = FFMPEG_SOURCES.linux;
+    console.log(`[DepInstaller] Using Linux sources: ${sources.length} sources`);
   }
 
   if (sources.length === 0) {
