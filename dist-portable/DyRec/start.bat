@@ -21,28 +21,26 @@ for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
 echo [OK] Node.js found: %NODE_VERSION%
 echo.
 
-REM Check .next directory
-echo [INFO] Checking .next directory...
-if not exist ".next" (
-    echo [ERROR] .next directory not found!
+REM Check next-build directory (renamed from .next to avoid hidden file issues)
+echo [INFO] Checking build directory...
+if not exist "next-build" (
+    echo [ERROR] next-build directory not found!
     echo.
-    echo This usually means your extraction tool skipped hidden files.
-    echo Please re-extract using 7-Zip or PowerShell:
-    echo   Expand-Archive -Path DyRec.zip -DestinationPath . -Force
+    echo Please make sure you extracted all files from DyRec.zip
     echo.
     pause
     exit /b 1
 )
 
-if not exist ".nextBUILD_ID" (
-    echo [ERROR] .nextBUILD_ID not found!
+if not exist "next-buildBUILD_ID" (
+    echo [ERROR] next-buildBUILD_ID not found!
     echo Please re-download and re-extract the ZIP file.
     echo.
     pause
     exit /b 1
 )
 
-echo [OK] .next directory verified
+echo [OK] Build directory verified
 echo.
 
 REM Check FFmpeg
