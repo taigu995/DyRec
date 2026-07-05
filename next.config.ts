@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   distDir: 'next-build',
-  // output: 'standalone',  // Disabled for portable package
+  output: 'standalone',
   /* config options here */
   allowedDevOrigins: ['*.dev.coze.site'],
   images: {

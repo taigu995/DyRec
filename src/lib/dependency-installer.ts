@@ -424,7 +424,7 @@ export function checkFFmpeg(): DepResult {
  */
 export function checkNetwork(): Promise<DepResult> {
   return new Promise((resolve) => {
-    const req = https.get('https://github.com', { timeout: 5000 }, (res) => {
+    const req = https.get('https://www.baidu.com', { timeout: 5000 }, (res) => {
       resolve({
         name: '网络连接',
         status: DepStatus.INSTALLED,
