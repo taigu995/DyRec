@@ -122,6 +122,36 @@ echo [OK] Dependencies installed
 echo [OK] Dependencies installed >> "%LOG_FILE%"
 echo. >> "%LOG_FILE%"
 
+REM Check if .next directory exists (required for Next.js)
+if not exist ".next" (
+    echo [ERROR] .next directory not found!
+    echo [ERROR] .next directory not found! >> "%LOG_FILE%"
+    echo.
+    echo This usually means your extraction tool skipped hidden files.
+    echo Please re-extract the ZIP file using one of these methods:
+    echo   1. Use 7-Zip (https://www.7-zip.org/)
+    echo   2. Use Windows built-in extract, then check if .next folder exists
+    echo   3. Use PowerShell: Expand-Archive -Path DyRec.zip -DestinationPath . -Force
+    echo.
+    echo 按任意键退出...
+    pause >nul
+    exit /b 1
+)
+
+if not exist ".next\BUILD_ID" (
+    echo [ERROR] .next\BUILD_ID not found! Build may be incomplete.
+    echo [ERROR] .next\BUILD_ID not found! >> "%LOG_FILE%"
+    echo Please re-download and re-extract the ZIP file.
+    echo.
+    echo 按任意键退出...
+    pause >nul
+    exit /b 1
+)
+
+echo [OK] .next directory verified
+echo [OK] .next directory verified >> "%LOG_FILE%"
+echo. >> "%LOG_FILE%"
+
 echo --------------------------------------------
 echo   Starting DyRec server...
 echo --------------------------------------------
