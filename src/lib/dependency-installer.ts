@@ -271,6 +271,22 @@ function findSystemFFmpeg(): string | null {
     }
   }
 
+  // 3. 检查系统 PATH (通过 where/which 命令)
+  try {
+    const { execSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
+    const result = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    if (result) {
+      // where 命令可能返回多行，取第一行
+      const firstPath = result.split(/[\r\n]+/)[0].trim();
+      if (firstPath && fs.existsSync(firstPath)) {
+        return firstPath;
+      }
+    }
+  } catch {
+    // ffmpeg 不在 PATH 中，忽略
+  }
+
   return null;
 }
 
