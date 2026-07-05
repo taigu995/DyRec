@@ -125,9 +125,76 @@ export function getDepsDir(): string {
 }
 
 /**
+ * 获取自定义 FFmpeg 路径配置文件
+ */
+function getCustomFFmpegPathFile(): string {
+  return path.join(getDepsDir(), 'ffmpeg-path.json');
+}
+
+/**
+ * 保存自定义 FFmpeg 路径
+ */
+export function saveCustomFFmpegPath(customPath: string): boolean {
+  try {
+    // 验证路径是否有效
+    if (!fs.existsSync(customPath)) {
+      return false;
+    }
+    
+    // 验证是否是有效的 ffmpeg
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    const ffmpegFile = path.basename(customPath);
+    if (ffmpegFile !== `ffmpeg${ext}` && ffmpegFile !== 'ffmpeg') {
+      // 如果指向的是目录，检查目录下是否有 ffmpeg
+      const stat = fs.statSync(customPath);
+      if (stat.isDirectory()) {
+        const ffmpegInDir = path.join(customPath, `ffmpeg${ext}`);
+        if (!fs.existsSync(ffmpegInDir)) return false;
+      }
+    }
+    
+    fs.writeFileSync(getCustomFFmpegPathFile(), JSON.stringify({ path: customPath }, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 获取自定义 FFmpeg 路径
+ */
+export function getCustomFFmpegPath(): string | null {
+  try {
+    const file = getCustomFFmpegPathFile();
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      if (data.path && fs.existsSync(data.path)) {
+        return data.path;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
  * 获取 FFmpeg 可执行文件路径
  */
 export function getFFmpegPath(): string {
+  // 1. 检查自定义路径
+  const customPath = getCustomFFmpegPath();
+  if (customPath) {
+    const stat = fs.statSync(customPath);
+    if (stat.isFile()) return customPath;
+    if (stat.isDirectory()) {
+      const ext = process.platform === 'win32' ? '.exe' : '';
+      const ffmpegInDir = path.join(customPath, `ffmpeg${ext}`);
+      if (fs.existsSync(ffmpegInDir)) return ffmpegInDir;
+    }
+  }
+
+  // 2. 检查 .deps 目录
   const depsDir = getDepsDir();
   const ext = process.platform === 'win32' ? '.exe' : '';
   return path.join(depsDir, `ffmpeg${ext}`);
@@ -150,19 +217,115 @@ function checkCommand(command: string, args: string[] = ['--version']): { availa
 }
 
 /**
+ * 验证 FFmpeg 可执行文件并返回版本信息
+ */
+function validateFFmpeg(exePath: string): string | null {
+  try {
+    const result = execSync(`"${exePath}" -version`, {
+      timeout: 10000,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    return result.split('\n')[0].trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 从环境变量或常见路径查找 FFmpeg
+ */
+function findSystemFFmpeg(): string | null {
+  // 1. 检查环境变量 (由 start.bat 设置)
+  const envPath = process.env.DYREC_FFMPEG_PATH;
+  if (envPath) {
+    try {
+      const stat = fs.statSync(envPath);
+      if (stat.isFile()) {
+        const ext = process.platform === 'win32' ? '.exe' : '';
+        if (envPath.endsWith(`ffmpeg${ext}`) || envPath.endsWith('ffmpeg')) {
+          return envPath;
+        }
+      }
+      if (stat.isDirectory()) {
+        const ext = process.platform === 'win32' ? '.exe' : '';
+        const ffmpegInDir = path.join(envPath, `ffmpeg${ext}`);
+        if (fs.existsSync(ffmpegInDir)) return ffmpegInDir;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. Windows: 检查常见安装路径
+  if (process.platform === 'win32') {
+    const commonPaths = [
+      'C:\\ffmpeg\\bin',
+      'C:\\Program Files\\ffmpeg\\bin',
+      'C:\\Program Files (x86)\\ffmpeg\\bin',
+      path.join(process.env.LOCALAPPDATA || '', 'ffmpeg', 'bin'),
+      path.join(process.env.USERPROFILE || '', 'ffmpeg', 'bin'),
+    ];
+    
+    for (const dir of commonPaths) {
+      const ffmpegExe = path.join(dir, 'ffmpeg.exe');
+      if (fs.existsSync(ffmpegExe)) return ffmpegExe;
+    }
+  }
+
+  return null;
+}
+
+/**
  * 检测 FFmpeg
  */
 export function checkFFmpeg(): DepResult {
-  // 1. 检查应用目录下的 ffmpeg
-  const bundledPath = getFFmpegPath();
-  if (fs.existsSync(bundledPath)) {
+  // 1. 检查自定义路径（用户手动设置）
+  const customPath = getCustomFFmpegPath();
+  if (customPath) {
+    let customExePath = customPath;
     try {
-      const result = execSync(`"${bundledPath}" -version`, {
-        timeout: 10000,
-        stdio: 'pipe',
-        encoding: 'utf-8',
-      });
-      const version = result.split('\n')[0].trim();
+      const stat = fs.statSync(customPath);
+      if (stat.isDirectory()) {
+        const ext = process.platform === 'win32' ? '.exe' : '';
+        customExePath = path.join(customPath, `ffmpeg${ext}`);
+      }
+    } catch { /* ignore */ }
+    
+    if (fs.existsSync(customExePath)) {
+      const version = validateFFmpeg(customExePath);
+      if (version) {
+        return {
+          name: 'FFmpeg',
+          status: DepStatus.INSTALLED,
+          version,
+          path: customExePath,
+          source: 'custom',
+          description: `录制功能必需，使用自定义路径: ${customPath}`,
+        };
+      }
+    }
+  }
+
+  // 2. 检查环境变量和常见路径
+  const envFFmpeg = findSystemFFmpeg();
+  if (envFFmpeg) {
+    const version = validateFFmpeg(envFFmpeg);
+    if (version) {
+      return {
+        name: 'FFmpeg',
+        status: DepStatus.INSTALLED,
+        version,
+        path: envFFmpeg,
+        source: 'env',
+        description: '录制功能必需，使用环境变量指定的路径',
+      };
+    }
+  }
+
+  // 3. 检查 .deps 目录下的 ffmpeg
+  const bundledPath = path.join(getDepsDir(), process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  if (fs.existsSync(bundledPath)) {
+    const version = validateFFmpeg(bundledPath);
+    if (version) {
       return {
         name: 'FFmpeg',
         status: DepStatus.INSTALLED,
@@ -171,12 +334,10 @@ export function checkFFmpeg(): DepResult {
         source: 'bundled',
         description: '录制功能必需，已安装到应用目录',
       };
-    } catch {
-      // 文件存在但无法执行
     }
   }
 
-  // 2. 检查系统 PATH 中的 ffmpeg
+  // 4. 检查系统 PATH 中的 ffmpeg
   const systemCheck = checkCommand('ffmpeg');
   if (systemCheck.available) {
     return {
@@ -189,7 +350,7 @@ export function checkFFmpeg(): DepResult {
     };
   }
 
-  // 3. 未安装
+  // 5. 未安装
   return {
     name: 'FFmpeg',
     status: DepStatus.NOT_INSTALLED,

@@ -17,6 +17,7 @@ import {
   Film,
   Wifi,
   Server,
+  FolderOpen,
 } from 'lucide-react';
 
 // 类型定义
@@ -85,6 +86,9 @@ export default function SetupPage() {
   const [installProgress, setInstallProgress] = useState<InstallProgress | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
   const [isElectron, setIsElectron] = useState(false);
+  const [customFFmpegPath, setCustomFFmpegPath] = useState('');
+  const [isSettingPath, setIsSettingPath] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
 
   // 检测是否在 Electron 环境
   useEffect(() => {
@@ -225,6 +229,38 @@ export default function SetupPage() {
     setInstallProgress(null);
   };
 
+  // 手动设置 FFmpeg 路径
+  const handleSetFFmpegPath = async () => {
+    if (!customFFmpegPath.trim()) {
+      setPathError('请输入 FFmpeg 路径');
+      return;
+    }
+
+    setIsSettingPath(true);
+    setPathError(null);
+
+    try {
+      const res = await fetch('/api/dependencies/ffmpeg-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: customFFmpegPath.trim() }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setPathError(null);
+        setCustomFFmpegPath('');
+        await runCheck();
+      } else {
+        setPathError(data.error || '设置失败');
+      }
+    } catch {
+      setPathError('设置失败，请检查路径是否正确');
+    }
+
+    setIsSettingPath(false);
+  };
+
   // 判断是否可以进入主界面
   const ffmpegDep = dependencies.find((d) => d.name === 'FFmpeg');
   const canProceed = ffmpegDep?.status === 'installed';
@@ -343,8 +379,8 @@ export default function SetupPage() {
                     <h3 className="text-sm font-medium text-zinc-200 mb-1">FFmpeg 未安装</h3>
                     <p className="text-xs text-zinc-500">
                       {isElectron
-                        ? '点击下方按钮自动下载安装 FFmpeg（约 80MB），安装后即可使用录制功能。'
-                        : '点击下方按钮自动下载 FFmpeg（约 80MB），下载完成后即可使用录制功能。'}
+                        ? '点击下方按钮自动下载安装 FFmpeg（约 80MB），或手动指定已安装的 FFmpeg 路径。'
+                        : '可自动下载 FFmpeg，或手动指定已安装的 FFmpeg 路径。'}
                     </p>
                   </div>
                   {installError && (
@@ -369,6 +405,54 @@ export default function SetupPage() {
                         </>
                       )}
                     </Button>
+
+                  {/* 手动指定路径 */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-zinc-700" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-zinc-900 px-2 text-zinc-500">或手动指定路径</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input
+                          type="text"
+                          value={customFFmpegPath}
+                          onChange={(e) => setCustomFFmpegPath(e.target.value)}
+                          placeholder={process.platform === 'win32' 
+                            ? '例如: C:\\ffmpeg\\bin\\ffmpeg.exe 或 C:\\ffmpeg\\bin'
+                            : '例如: /usr/local/bin/ffmpeg'}
+                          className="w-full h-9 pl-9 pr-3 rounded-md bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSetFFmpegPath();
+                          }}
+                        />
+                      </div>
+                      <Button
+                        onClick={handleSetFFmpegPath}
+                        disabled={isSettingPath || !customFFmpegPath.trim()}
+                        variant="outline"
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                      >
+                        {isSettingPath ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          '确认'
+                        )}
+                      </Button>
+                    </div>
+                    {pathError && (
+                      <p className="text-xs text-red-400">{pathError}</p>
+                    )}
+                    <p className="text-xs text-zinc-600">
+                      输入 FFmpeg 可执行文件的完整路径，或其所在目录的路径
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>

@@ -45,13 +45,22 @@ REM Check FFmpeg (just check file existence, don't run it)
 echo [INFO] Checking FFmpeg...
 echo [%date% %time%] Checking FFmpeg... >> "%LOG_FILE%"
 set FFMPEG_FOUND=0
+set FFMPEG_PATH=
 
 REM Check if ffmpeg is in .deps folder
-if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
+if exist ".deps\ffmpeg.exe" (
     set FFMPEG_FOUND=1
+    set "FFMPEG_PATH=%CD%\.deps"
     echo [OK] FFmpeg found in .deps folder
     echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
-    set "PATH=%PATH%;%CD%\.deps\ffmpeg\bin"
+    goto :ffmpeg_done
+)
+
+if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
+    set FFMPEG_FOUND=1
+    set "FFMPEG_PATH=%CD%\.deps\ffmpeg\bin"
+    echo [OK] FFmpeg found in .deps folder
+    echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
     goto :ffmpeg_done
 )
 
@@ -59,14 +68,20 @@ REM Check if ffmpeg is in PATH (just check if file exists, not running)
 for %%p in (ffmpeg.exe) do (
     if not "%%~$PATH:p"=="" (
         set FFMPEG_FOUND=1
-        echo [OK] FFmpeg found in PATH
-        echo [OK] FFmpeg found in PATH >> "%LOG_FILE%"
+        set "FFMPEG_PATH=%%~$PATH:p"
+        echo [OK] FFmpeg found in PATH: %%~$PATH:p
+        echo [OK] FFmpeg found in PATH: %%~$PATH:p >> "%LOG_FILE%"
         goto :ffmpeg_done
     )
 )
 
 :ffmpeg_done
-if "%FFMPEG_FOUND%"=="0" (
+if "%FFMPEG_FOUND%"=="1" (
+    REM Set environment variable for server to detect FFmpeg
+    set "DYREC_FFMPEG_PATH=%FFMPEG_PATH%"
+    echo [INFO] FFmpeg path: %FFMPEG_PATH%
+    echo [INFO] FFmpeg path: %FFMPEG_PATH% >> "%LOG_FILE%"
+) else (
     echo [WARN] FFmpeg not found - recording disabled
     echo [WARN] FFmpeg not found - recording disabled >> "%LOG_FILE%"
     echo        You can install FFmpeg from /setup page
