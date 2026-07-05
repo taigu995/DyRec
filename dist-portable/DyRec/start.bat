@@ -21,7 +21,7 @@ for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
 echo [OK] Node.js found: %NODE_VERSION%
 echo.
 
-REM Check next-build directory (renamed from .next to avoid hidden file issues)
+REM Check next-build directory
 echo [INFO] Checking build directory...
 if not exist "next-build" (
     echo [ERROR] next-build directory not found!
@@ -32,8 +32,8 @@ if not exist "next-build" (
     exit /b 1
 )
 
-if not exist "next-buildBUILD_ID" (
-    echo [ERROR] next-buildBUILD_ID not found!
+if not exist "next-build\BUILD_ID" (
+    echo [ERROR] next-build\BUILD_ID not found!
     echo Please re-download and re-extract the ZIP file.
     echo.
     pause
@@ -63,8 +63,7 @@ echo.
 
 REM Install dependencies
 echo [INFO] Checking dependencies...
-if not exist "node_modules
-ext" (
+if not exist "node_modules\next" (
     echo [INFO] Installing dependencies (first run)...
     call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund
     if errorlevel 1 (
