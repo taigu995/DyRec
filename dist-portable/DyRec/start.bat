@@ -1,34 +1,16 @@
 @echo off
 chcp 65001 >nul 2>&1
-setlocal EnableDelayedExpansion
-
-REM Create logs directory
-if not exist "logs" mkdir logs
-
-REM Generate timestamp using PowerShell (more reliable than wmic)
-for /f "tokens=*" %%i in ('powershell -NoProfile -Command "Get-Date -Format 'yyyyMMdd_HHmmss'"') do set TIMESTAMP=%%i
-set LOG_FILE=logs\startup_%TIMESTAMP%.log
-set ERROR_LOG=logs\startup_%TIMESTAMP%.error.log
-
-REM Initialize log file
-echo [%date% %time%] DyRec Startup Log > "%LOG_FILE%"
-echo [%date% %time%] Working directory: %CD% >> "%LOG_FILE%"
-echo. >> "%LOG_FILE%"
 
 echo ============================================
 echo   DyRec - Douyin Live Recorder Startup
 echo ============================================
 echo.
-echo Log file: %LOG_FILE%
-echo.
 
 REM Check Node.js
 echo [INFO] Checking Node.js...
-echo [%date% %time%] Checking Node.js... >> "%LOG_FILE%"
 where node >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Node.js not found!
-    echo [ERROR] Node.js not found! >> "%LOG_FILE%"
     echo Please install Node.js 20+ from https://nodejs.org/zh-cn
     echo.
     pause
@@ -37,73 +19,23 @@ if errorlevel 1 (
 
 for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
 echo [OK] Node.js found: %NODE_VERSION%
-echo [OK] Node.js found: %NODE_VERSION% >> "%LOG_FILE%"
-echo. >> "%LOG_FILE%"
+echo.
 
-REM Check FFmpeg
-echo [INFO] Checking FFmpeg...
-echo [%date% %time%] Checking FFmpeg... >> "%LOG_FILE%"
-set FFMPEG_FOUND=0
-set FFMPEG_PATH=
-
-REM Check if ffmpeg is in .deps folder
-if exist ".deps\ffmpeg.exe" (
-    set FFMPEG_FOUND=1
-    set "FFMPEG_PATH=%CD%\.deps"
-    echo [OK] FFmpeg found in .deps folder
-    echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
-    goto :ffmpeg_done
-)
-
-if exist ".deps\ffmpeg\bin\ffmpeg.exe" (
-    set FFMPEG_FOUND=1
-    set "FFMPEG_PATH=%CD%\.deps\ffmpeg\bin"
-    echo [OK] FFmpeg found in .deps folder
-    echo [OK] FFmpeg found in .deps folder >> "%LOG_FILE%"
-    goto :ffmpeg_done
-)
-
-REM Check if ffmpeg is in PATH
-for %%p in (ffmpeg.exe) do (
-    if not "%%~$PATH:p"=="" (
-        set FFMPEG_FOUND=1
-        set "FFMPEG_PATH=%%~$PATH:p"
-        echo [OK] FFmpeg found in PATH: %%~$PATH:p
-        echo [OK] FFmpeg found in PATH: %%~$PATH:p >> "%LOG_FILE%"
-        goto :ffmpeg_done
-    )
-)
-
-:ffmpeg_done
-if "%FFMPEG_FOUND%"=="1" (
-    set "DYREC_FFMPEG_PATH=%FFMPEG_PATH%"
-    echo [INFO] FFmpeg path: %FFMPEG_PATH%
-    echo [INFO] FFmpeg path: %FFMPEG_PATH% >> "%LOG_FILE%"
-) else (
-    echo [WARN] FFmpeg not found - recording disabled
-    echo [WARN] FFmpeg not found - recording disabled >> "%LOG_FILE%"
-    echo        You can install FFmpeg from /setup page
-)
-echo. >> "%LOG_FILE%"
-
-REM Check if .next directory exists (required for Next.js)
+REM Check .next directory
 echo [INFO] Checking .next directory...
 if not exist ".next" (
     echo [ERROR] .next directory not found!
-    echo [ERROR] .next directory not found! >> "%LOG_FILE%"
     echo.
     echo This usually means your extraction tool skipped hidden files.
-    echo Please re-extract the ZIP file using one of these methods:
-    echo   1. Use 7-Zip (https://www.7-zip.org/)
-    echo   2. Use PowerShell: Expand-Archive -Path DyRec.zip -DestinationPath . -Force
+    echo Please re-extract using 7-Zip or PowerShell:
+    echo   Expand-Archive -Path DyRec.zip -DestinationPath . -Force
     echo.
     pause
     exit /b 1
 )
 
 if not exist ".next\BUILD_ID" (
-    echo [ERROR] .next\BUILD_ID not found! Build may be incomplete.
-    echo [ERROR] .next\BUILD_ID not found! >> "%LOG_FILE%"
+    echo [ERROR] .next\BUILD_ID not found!
     echo Please re-download and re-extract the ZIP file.
     echo.
     pause
@@ -111,77 +43,56 @@ if not exist ".next\BUILD_ID" (
 )
 
 echo [OK] .next directory verified
-echo [OK] .next directory verified >> "%LOG_FILE%"
-echo. >> "%LOG_FILE%"
-
-echo --------------------------------------------
-echo   Installing dependencies...
-echo --------------------------------------------
 echo.
-echo [%date% %time%] Installing dependencies... >> "%LOG_FILE%"
 
-REM Check if node_modules exists
+REM Check FFmpeg
+echo [INFO] Checking FFmpeg...
+set FFMPEG_PATH=
+for %%p in (ffmpeg.exe) do (
+    if not "%%~$PATH:p"=="" (
+        set "FFMPEG_PATH=%%~$PATH:p"
+        echo [OK] FFmpeg found: %%~$PATH:p
+    )
+)
+
+if defined FFMPEG_PATH (
+    set "DYREC_FFMPEG_PATH=%FFMPEG_PATH%"
+) else (
+    echo [WARN] FFmpeg not found - recording disabled
+    echo        You can install FFmpeg from /setup page
+)
+echo.
+
+REM Install dependencies
+echo [INFO] Checking dependencies...
 if not exist "node_modules\next" (
-    echo [INFO] node_modules not found, installing...
-    echo [INFO] node_modules not found, installing... >> "%LOG_FILE%"
-    
-    REM Install dependencies using Chinese mirror
-    echo [INFO] Running: npm install --production --legacy-peer-deps
-    echo [INFO] Running: npm install --production --legacy-peer-deps >> "%LOG_FILE%"
-    call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund >> "%LOG_FILE%" 2>&1
-    
+    echo [INFO] Installing dependencies (first run)...
+    call npm install --production --legacy-peer-deps --registry=https://registry.npmmirror.com --no-audit --no-fund
     if errorlevel 1 (
-        echo [ERROR] npm install failed with error code: !errorlevel!
-        echo [ERROR] npm install failed with error code: !errorlevel! >> "%LOG_FILE%"
-        echo Please check the log file for details: %LOG_FILE%
-        echo.
+        echo [ERROR] npm install failed!
         pause
         exit /b 1
     )
-    
     echo [OK] Dependencies installed
-    echo [OK] Dependencies installed >> "%LOG_FILE%"
 ) else (
-    echo [INFO] node_modules already exists, skipping install
-    echo [INFO] node_modules already exists >> "%LOG_FILE%"
+    echo [OK] Dependencies already installed
 )
-echo. >> "%LOG_FILE%"
+echo.
 
+REM Start server
 echo --------------------------------------------
 echo   Starting DyRec server...
 echo --------------------------------------------
 echo.
-echo [%date% %time%] Starting server... >> "%LOG_FILE%"
-echo Server is starting on http://localhost:5000
+echo Server will be available at: http://localhost:5000
 echo Press Ctrl+C to stop the server
 echo.
 
-REM Set environment variable for FFmpeg
-if defined DYREC_FFMPEG_PATH (
-    set "DYREC_FFMPEG_PATH=%DYREC_FFMPEG_PATH%"
-)
-
-REM Start the server
-node server.js >> "%LOG_FILE%" 2>> "%ERROR_LOG%"
+node server.js
 
 echo.
 echo ============================================
 echo   Server stopped
 echo ============================================
-echo [%date% %time%] Server stopped >> "%LOG_FILE%"
-
-REM Check if there was an error
-if exist "%ERROR_LOG%" (
-    for %%A in ("%ERROR_LOG%") do set ERROR_SIZE=%%~zA
-    if !ERROR_SIZE! GTR 0 (
-        echo.
-        echo [ERROR] Server exited with errors. Check: %ERROR_LOG%
-        echo.
-        echo Last 10 lines of error log:
-        powershell -NoProfile -Command "Get-Content '%ERROR_LOG%' -Tail 10"
-    )
-)
-
 echo.
-echo 按任意键退出...
-pause >nul
+pause
