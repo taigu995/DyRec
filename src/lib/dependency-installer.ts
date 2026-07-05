@@ -41,20 +41,36 @@ export interface ProgressInfo {
   message: string;
 }
 
-// FFmpeg 下载源（多个镜像，自动选择可用的）
+// FFmpeg 下载源（BtbN/FFmpeg-Builds 项目）
+// https://github.com/BtbN/FFmpeg-Builds/releases
 const FFMPEG_DOWNLOAD_URLS = {
   win64: [
-    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
+    // BtbN/FFmpeg-Builds (推荐，每日自动构建)
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip',
+    // 备用源
     'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
   ],
   darwin_arm: [
+    // BtbN/FFmpeg-Builds
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-darwin-arm64-gpl-shared.tar.xz',
+    // 备用源
     'https://evermeet.cx/ffmpeg/getrelease/zip',
   ],
   darwin_x64: [
+    // BtbN/FFmpeg-Builds
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-darwin-amd64-gpl-shared.tar.xz',
+    // 备用源
     'https://evermeet.cx/ffmpeg/getrelease/zip',
   ],
   linux: [
+    // BtbN/FFmpeg-Builds (推荐)
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl-shared.tar.xz',
+    // 备用源
     'https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-amd64-static.tar.xz',
+  ],
+  linux_arm64: [
+    // BtbN/FFmpeg-Builds
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl-shared.tar.xz',
   ],
 };
 
@@ -274,7 +290,7 @@ async function extractZip(zipPath: string, destDir: string, fileName: string): P
     if (process.platform === 'win32') {
       // Windows 上使用 PowerShell
       execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${destDir}'"`, {
-        timeout: 60000,
+        timeout: 120000,
       });
       const findCmd = `dir /s /b "${path.join(destDir, fileName)}"`;
       const findResult = execSync(findCmd, { encoding: 'utf-8', timeout: 10000 }).trim();
@@ -283,7 +299,7 @@ async function extractZip(zipPath: string, destDir: string, fileName: string): P
       }
     } else {
       // Linux/Mac 上使用 unzip
-      execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { timeout: 60000 });
+      execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { timeout: 120000 });
       const findResult = execSync(`find "${destDir}" -name "${fileName}" -type f`, {
         encoding: 'utf-8',
         timeout: 10000,
@@ -297,6 +313,41 @@ async function extractZip(zipPath: string, destDir: string, fileName: string): P
   }
 
   throw new Error(`Could not find ${fileName} in extracted files`);
+}
+
+/**
+ * 解压 TAR.XZ 文件
+ */
+async function extractTarXz(tarPath: string, destDir: string, fileName: string): Promise<string> {
+  try {
+    // 使用 tar 命令解压 tar.xz 文件
+    execSync(`tar -xf "${tarPath}" -C "${destDir}"`, { timeout: 120000 });
+    
+    // 查找 ffmpeg 可执行文件
+    const findResult = execSync(`find "${destDir}" -name "${fileName}" -type f`, {
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+    
+    if (findResult) {
+      return findResult.split('\n')[0];
+    }
+  } catch {
+    throw new Error(`Failed to extract TAR.XZ: ${tarPath}`);
+  }
+
+  throw new Error(`Could not find ${fileName} in extracted files`);
+}
+
+/**
+ * 解压文件（根据扩展名自动选择解压方式）
+ */
+async function extractArchive(archivePath: string, destDir: string, fileName: string): Promise<string> {
+  if (archivePath.endsWith('.tar.xz') || archivePath.endsWith('.tar.gz')) {
+    return extractTarXz(archivePath, destDir, fileName);
+  } else {
+    return extractZip(archivePath, destDir, fileName);
+  }
 }
 
 /**
@@ -361,7 +412,7 @@ export async function installFFmpeg(onProgress?: (info: ProgressInfo) => void): 
 
   // 解压并提取 ffmpeg 可执行文件
   const ffmpegName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-  const extractedPath = await extractZip(zipPath, depsDir, ffmpegName);
+  const extractedPath = await extractArchive(zipPath, depsDir, ffmpegName);
 
   // 移动到目标位置
   const targetPath = getFFmpegPath();
