@@ -2,16 +2,40 @@ const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const path = require('path');
+const fs = require('fs');
 
 const dev = false;
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '5000', 10);
+const buildDir = path.join(__dirname, 'next-build');
 
 console.log('[Server] Starting DyRec server...');
 console.log('[Server] Directory:', __dirname);
-console.log('[Server] Build dir:', path.join(__dirname, 'next-build'));
+console.log('[Server] Build dir:', buildDir);
 
-const app = next({ dev, dir: __dirname, hostname, port });
+// Check if build directory exists
+if (!fs.existsSync(buildDir)) {
+  console.error('[Server] ERROR: Build directory not found:', buildDir);
+  process.exit(1);
+}
+
+// Load next.config.js if it exists
+let nextConfig = { distDir: 'next-build' };
+const configPath = path.join(__dirname, 'next.config.js');
+if (fs.existsSync(configPath)) {
+  try {
+    nextConfig = require(configPath);
+    console.log('[Server] Loaded next.config.js');
+  } catch (e) {
+    console.warn('[Server] Failed to load next.config.js:', e.message);
+  }
+}
+
+const app = next({
+  dev,
+  dir: __dirname,
+  conf: nextConfig,
+});
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
