@@ -4,21 +4,41 @@ const next = require('next')
 const port = parseInt(process.env.PORT, 10) || 5000
 const dev = false
 
+console.log('[Server] Starting Next.js server...')
+console.log('[Server] Directory:', __dirname)
+console.log('[Server] Port:', port)
+
 const app = next({ dev, dir: __dirname })
-const handle = app.getRequestHandler()
 
 app.prepare().then(() => {
-  createServer((req, res) => {
+  console.log('[Server] Next.js prepared successfully')
+  
+  const server = createServer((req, res) => {
     const parsedUrl = new URL(req.url, `http://localhost:${port}`)
     handle(req, res, parsedUrl)
-  }).listen(port, '0.0.0.0', (err) => {
-    if (err) {
-      console.error('Failed to start server:', err)
-      process.exit(1)
-    }
-    console.log(`> Ready on http://localhost:${port}`)
   })
+  
+  const handle = app.getRequestHandler()
+  
+  server.on('error', (err) => {
+    console.error('[Server] Server error:', err)
+  })
+  
+  server.on('listening', () => {
+    console.log(`[Server] Server listening on port ${port}`)
+    console.log(`[Server] Ready on http://localhost:${port}`)
+  })
+  
+  server.listen(port, '0.0.0.0')
 }).catch((err) => {
-  console.error('Failed to prepare Next.js:', err)
+  console.error('[Server] Failed to prepare Next.js:', err)
   process.exit(1)
+})
+
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled rejection at:', promise, 'reason:', reason)
 })
