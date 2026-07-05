@@ -3,7 +3,7 @@
 // ============================================================
 
 import { NextRequest } from 'next/server';
-import { getOrCreateClient, removeClient } from '@/lib/douyin-ws';
+import { getOrCreateDouyinWSClient, removeDouyinWSClient } from '@/lib/douyin-ws';
 import { getRooms } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       // 获取或创建 WebSocket 客户端
-      const client = getOrCreateClient(roomId, cookie);
+      const client = getOrCreateDouyinWSClient(roomId, cookie);
 
       // 监听消息并转发
       const onMessage = (msg: Record<string, unknown>) => {
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
         client.off('error', onError);
         // 如果没有其他监听器，断开连接
         if (client.listenerCount('message') === 0) {
-          removeClient(roomId);
+          removeDouyinWSClient(roomId);
         }
       };
 

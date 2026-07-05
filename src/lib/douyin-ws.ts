@@ -1,21 +1,96 @@
 // ============================================================
 // 抖音直播 WebSocket 弹幕/礼物 连接服务
-// 通过 WebSocket 连接抖音直播间，实时获取弹幕、礼物等消息
+// 使用 douyin-danma-listener 库实现稳定的弹幕连接
 // ============================================================
 
 import { EventEmitter } from 'events';
-import crypto from 'crypto';
+import DouYinDanmaClient from 'douyin-danma-listener';
 
-// 消息类型常量
-const MSG_METHODS = {
-  CHAT: 'WebcastChatMessage',
-  GIFT: 'WebcastGiftMessage',
-  MEMBER: 'WebcastMemberMessage',
-  LIKE: 'WebcastLikeMessage',
-  SOCIAL: 'WebcastSocialMessage',
-  ROOM_USER: 'WebcastRoomUserSeqMessage',
-  CONTROL: 'WebcastControlMessage',
-} as const;
+// 定义消息类型（与 douyin-danma-listener 的类型兼容）
+interface ChatMessage {
+  content: string;
+  user: {
+    nickname: string;
+    id: string;
+    displayId: string;
+    secUserId: string;
+    avatarThumb: { urlListList: string[] };
+  };
+  msgId: string;
+  roomId: string;
+  createTime: string;
+}
+
+interface GiftMessage {
+  gift: {
+    id: string;
+    name: string;
+    diamondCount: string;
+    image: { urlListList: string[] };
+  };
+  comboCount: string;
+  repeatCount: string;
+  groupCount: string;
+  totalCount: string;
+  describe: string;
+  toUser: unknown;
+  user: {
+    nickname: string;
+    id: string;
+    displayId: string;
+    secUserId: string;
+    avatarThumb: { urlListList: string[] };
+  };
+  msgId: string;
+  roomId: string;
+  createTime: string;
+}
+
+interface MemberMessage {
+  user: {
+    nickname: string;
+    id: string;
+    displayId: string;
+    secUserId: string;
+    avatarThumb: { urlListList: string[] };
+  };
+  memberCount: string;
+  action: string;
+  msgId: string;
+  roomId: string;
+  createTime: string;
+}
+
+interface LikeMessage {
+  user: {
+    nickname: string;
+    id: string;
+    displayId: string;
+    secUserId: string;
+    avatarThumb: { urlListList: string[] };
+  };
+  count: string;
+  total: string;
+  msgId: string;
+  roomId: string;
+  createTime: string;
+}
+
+interface SocialMessage {
+  user: {
+    nickname: string;
+    id: string;
+    displayId: string;
+    secUserId: string;
+    avatarThumb: { urlListList: string[] };
+  };
+  shareTarget: string;
+  action: string;
+  followCount: string;
+  msgId: string;
+  roomId: string;
+  createTime: string;
+}
 
 /** 解析后的消息 */
 export interface ParsedMessage {
@@ -25,967 +100,234 @@ export interface ParsedMessage {
 
 /**
  * 抖音直播 WebSocket 客户端
- * 连接抖音直播间 WebSocket 获取实时弹幕、礼物等消息
+ * 使用 douyin-danma-listener 库连接抖音直播间获取实时弹幕、礼物等消息
  */
 export class DouyinWebSocketClient extends EventEmitter {
   private roomId: string;
-  private ws: import('ws').WebSocket | null = null;
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectCount = 0;
-  private maxReconnect = 5;
+  private client: DouYinDanmaClient | null = null;
   private _isConnected = false;
   private cookie: string;
-  private roomIdInternal: string = '';
 
-  constructor(roomId: string, cookie: string = '') {
+  constructor(roomId: string, cookie = '') {
     super();
     this.roomId = roomId;
     this.cookie = cookie;
   }
 
-  get isConnected(): boolean {
-    return this._isConnected;
-  }
-
   /**
-   * 连接 WebSocket
+   * 连接到抖音直播间 WebSocket
    */
   async connect(): Promise<void> {
-    if (this._isConnected) return;
+    if (this.client) {
+      this.disconnect();
+    }
 
     try {
-      // 如果没有 cookie，自动生成 ttwid
-      if (!this.cookie) {
-        this.cookie = await this.generateTtwid();
+      // 获取内部房间 ID（douyin-danma-listener 需要 id_str 而非 web_rid）
+      const internalRoomId = await this.fetchInternalRoomId(this.roomId);
+      if (!internalRoomId) {
+        throw new Error('无法获取房间 ID');
       }
 
-      // 先获取内部 room_id
-      await this.fetchInternalRoomId();
-
-      const wsUrl = this.buildWsUrl();
-      this.emit('status', 'connecting');
-
-      const { default: WebSocket } = await import('ws');
-      this.ws = new WebSocket(wsUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Cookie: this.cookie,
-          Referer: 'https://live.douyin.com/',
-        },
-        handshakeTimeout: 10000,
+      // 创建 douyin-danma-listener 客户端
+      this.client = new DouYinDanmaClient(internalRoomId, {
+        cookie: this.cookie || undefined,
+        autoStart: false,
+        autoReconnect: 3,
+        heartbeatInterval: 10000,
+        timeoutInterval: 30,
       });
 
-      this.ws.on('open', () => {
-        this._isConnected = true;
-        this.reconnectCount = 0;
-        this.emit('status', 'connected');
-        this.startHeartbeat();
-      });
+      // 绑定事件
+      this.setupEventHandlers();
 
-      this.ws.on('message', (data: Buffer) => {
-        this.handleMessage(data);
-      });
-
-      this.ws.on('close', (code: number, reason: Buffer) => {
-        this._isConnected = false;
-        this.stopHeartbeat();
-        this.emit('status', 'disconnected');
-        this.emit('close', code, reason.toString());
-        this.tryReconnect();
-      });
-
-      this.ws.on('error', (err: Error) => {
-        console.error('[DouyinWS] WebSocket error:', err.message);
-        // 安全地发射错误事件，避免无监听器时崩溃
-        if (this.listenerCount('error') > 0) {
-          this.emit('error', err.message);
-        }
-        this._isConnected = false;
-        this.stopHeartbeat();
-      });
-
-      // 处理未捕获的错误
-      this.ws.on('unexpected-response', (req: unknown, res: { statusCode: number }) => {
-        console.error('[DouyinWS] Unexpected response:', res.statusCode);
-        // 安全地发射错误事件，避免无监听器时崩溃
-        if (this.listenerCount('error') > 0) {
-          this.emit('error', `Unexpected server response: ${res.statusCode}`);
-        }
-        this._isConnected = false;
-        this.stopHeartbeat();
-        this.tryReconnect();
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '未知错误';
-      // 安全地发射错误事件，避免无监听器时崩溃
-      if (this.listenerCount('error') > 0) {
-        this.emit('error', `连接失败: ${msg}`);
-      }
-      this.tryReconnect();
+      // 连接
+      this.client.connect();
+      this._isConnected = true;
+    } catch (error) {
+      this._isConnected = false;
+      throw error;
     }
   }
 
   /**
-   * 获取 ttwid cookie
-   * 通过访问抖音直播首页自动获取，不需要用户登录
+   * 设置事件处理器
    */
-  private async generateTtwid(): Promise<string> {
-    try {
-      const response = await fetch('https://live.douyin.com/', {
-        method: 'GET',
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        redirect: 'follow',
-      });
+  private setupEventHandlers(): void {
+    if (!this.client) return;
 
-      // 从 Set-Cookie 头中提取 ttwid
-      const setCookie = response.headers.get('set-cookie');
-      if (setCookie) {
-        const match = setCookie.match(/ttwid=([^;]+)/);
-        if (match) {
-          return `ttwid=${match[1]}`;
-        }
-      }
+    // 使用 any 类型绕过类型检查
+    const client = this.client as any;
 
-      // 尝试从 response.headers.getSetCookie() 获取（Node.js 18+）
-      try {
-        const cookies = (response.headers as any).getSetCookie?.() as string[] | undefined;
-        if (cookies) {
-          for (const c of cookies) {
-            const match = c.match(/ttwid=([^;]+)/);
-            if (match) {
-              return `ttwid=${match[1]}`;
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    } catch (err) {
-      console.error('[DouyinWS] Failed to get ttwid:', err);
-    }
-    return '';
-  }
-
-  /**
-   * 获取内部 room_id (用于 WebSocket 连接)
-   */
-  private async fetchInternalRoomId(): Promise<void> {
-    try {
-      const params = new URLSearchParams({
-        aid: '6383',
-        app_name: 'douyin_web',
-        live_id: '1',
-        device_platform: 'web',
-        language: 'zh-CN',
-        browser_language: 'zh-CN',
-        browser_platform: 'Win32',
-        browser_name: 'Chrome',
-        browser_version: '120.0.0.0',
-        web_rid: this.roomId,
-      });
-
-      const response = await fetch(
-        `https://live.douyin.com/webcast/room/web/enter/?${params.toString()}`,
-        {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            Cookie: this.cookie,
-            Referer: 'https://live.douyin.com/',
-          },
-          signal: AbortSignal.timeout(10000),
-        }
-      );
-
-      const json = (await response.json()) as {
-        data?: { data?: Array<{ id_str: string; status: number }> };
-        status_code: number;
-      };
-
-      if (json.data?.data?.[0]?.id_str) {
-        this.roomIdInternal = json.data.data[0].id_str;
-      } else {
-        // 使用 web_rid 作为 fallback
-        this.roomIdInternal = this.roomId;
-      }
-    } catch {
-      this.roomIdInternal = this.roomId;
-    }
-  }
-
-  /**
-   * 构建 WebSocket URL
-   */
-  private buildWsUrl(): string {
-    const signature = this.generateSignature(this.roomIdInternal);
-
-    const params = new URLSearchParams({
-      app_name: 'douyin_web',
-      live_id: '1',
-      device_platform: 'web',
-      language: 'zh-CN',
-      browser_language: 'zh-CN',
-      browser_platform: 'Win32',
-      browser_name: 'Chrome',
-      browser_version: '120.0.0.0',
-      aid: '6383',
-      host: 'https://live.douyin.com',
-      endpoint: 'live_pc',
-      support_wrds: '1',
-      user_unique_id: '',
-      im_path: '/webcast/im/fetch/',
-      identity: 'audience',
-      room_id: this.roomIdInternal,
-      signature,
-      heartbeatDuration: '0',
-      cursor: '',
-      history: '',
-      is_first_req: 'true',
-      resp_content_type: 'protobuf',
+    // 连接成功
+    client.on('open', () => {
+      this._isConnected = true;
+      this.emit('open');
     });
 
-    return `wss://webcast5-ws-web-lf.douyin.com/webcast/im/push/v2/?${params.toString()}`;
+    // 连接关闭
+    client.on('close', () => {
+      this._isConnected = false;
+      this.emit('close');
+    });
+
+    // 错误处理
+    client.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+
+    // 重连
+    client.on('reconnect', (count: number) => {
+      this.emit('reconnect', count);
+    });
+
+    // 弹幕消息
+    client.on('chat', (message: ChatMessage) => {
+      this.emit('message', {
+        method: 'WebcastChatMessage',
+        data: {
+          user: {
+            id: message.user.id,
+            nickname: message.user.nickname,
+          },
+          content: message.content,
+        },
+      });
+    });
+
+    // 礼物消息
+    client.on('gift', (message: GiftMessage) => {
+      this.emit('message', {
+        method: 'WebcastGiftMessage',
+        data: {
+          user: {
+            id: message.user.id,
+            nickname: message.user.nickname,
+          },
+          gift: {
+            name: message.gift?.name || '未知礼物',
+            count: parseInt(String(message.totalCount)) || 1,
+          },
+        },
+      });
+    });
+
+    // 进入房间消息
+    client.on('member', (message: MemberMessage) => {
+      this.emit('message', {
+        method: 'WebcastMemberMessage',
+        data: {
+          user: {
+            id: message.user.id,
+            nickname: message.user.nickname,
+          },
+          action: message.action,
+        },
+      });
+    });
+
+    // 点赞消息
+    client.on('like', (message: LikeMessage) => {
+      this.emit('message', {
+        method: 'WebcastLikeMessage',
+        data: {
+          user: {
+            id: message.user.id,
+            nickname: message.user.nickname,
+          },
+          count: message.count,
+        },
+      });
+    });
+
+    // 社交消息（关注等）
+    client.on('social', (message: SocialMessage) => {
+      this.emit('message', {
+        method: 'WebcastSocialMessage',
+        data: {
+          user: {
+            id: message.user.id,
+            nickname: message.user.nickname,
+          },
+        },
+      });
+    });
   }
 
   /**
-   * 生成签名 (MD5 of room_id)
+   * 获取内部房间 ID（id_str）
+   * douyin-danma-listener 需要 id_str 而非 web_rid
    */
-  private generateSignature(roomId: string): string {
-    return crypto.createHash('md5').update(roomId).digest('hex');
-  }
-
-  /**
-   * 处理 WebSocket 消息
-   * 抖音使用 Protobuf 格式，这里尝试解析简化格式
-   */
-  private handleMessage(data: Buffer): void {
+  private async fetchInternalRoomId(webRid: string): Promise<string | null> {
     try {
-      // 尝试解析 protobuf 消息
-      // PushFrame 结构: seqId(1), logId(2), service(3), method(4), headers(5), payloadEncoding(6), payloadType(7), payload(8)
-      const parsed = this.parseProtobuf(data);
-      if (parsed) {
-        this.processMessages(parsed);
-      }
-    } catch {
-      // 解析失败时忽略，可能是心跳响应
-    }
-  }
+      const url = `https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=120.0.0.0&web_rid=${webRid}`;
 
-  /**
-   * 简化版 Protobuf 解析
-   * 提取关键字段用于消息分发
-   */
-  private parseProtobuf(data: Buffer): ParsedMessage | null {
-    try {
-      // 简单的 protobuf wire format 解析
-      let offset = 0;
-      const fields: Map<number, { wireType: number; value: Buffer | number }> =
-        new Map();
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
 
-      while (offset < data.length) {
-        const tagByte = data[offset];
-        const fieldNumber = tagByte >> 3;
-        const wireType = tagByte & 0x7;
-        offset++;
+      const data = await response.json() as {
+        data?: { data?: Array<{ id_str?: string }> };
+      };
 
-        if (wireType === 0) {
-          // Varint
-          let value = 0;
-          let shift = 0;
-          while (offset < data.length) {
-            const byte = data[offset];
-            offset++;
-            value |= (byte & 0x7f) << shift;
-            if ((byte & 0x80) === 0) break;
-            shift += 7;
-          }
-          fields.set(fieldNumber, { wireType, value });
-        } else if (wireType === 2) {
-          // Length-delimited
-          let length = 0;
-          let shift = 0;
-          while (offset < data.length) {
-            const byte = data[offset];
-            offset++;
-            length |= (byte & 0x7f) << shift;
-            if ((byte & 0x80) === 0) break;
-            shift += 7;
-          }
-          const value = data.subarray(offset, offset + length);
-          offset += length;
-          fields.set(fieldNumber, { wireType, value });
-        } else {
-          break;
-        }
-      }
-
-      // 提取 payload (field 8)
-      const payloadField = fields.get(8);
-      if (!payloadField || !Buffer.isBuffer(payloadField.value)) return null;
-
-      const payload = payloadField.value as Buffer;
-
-      // 解析 Response 结构
-      // messagesList(1), cursor(2), fetchInterval(3), now(4), needAck(9)
-      const messages = this.parseResponseMessages(payload);
-      if (messages.length > 0) {
-        return messages[0];
+      if (data.data?.data?.[0]?.id_str) {
+        return data.data.data[0].id_str;
       }
 
       return null;
-    } catch {
+    } catch (error) {
+      console.error('[DouyinWS] 获取房间 ID 失败:', error);
       return null;
     }
-  }
-
-  /**
-   * 解析 Response 中的消息列表
-   */
-  private parseResponseMessages(payload: Buffer): ParsedMessage[] {
-    const messages: ParsedMessage[] = [];
-    let offset = 0;
-
-    while (offset < payload.length) {
-      if (offset >= payload.length) break;
-
-      const tagByte = payload[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2 && fieldNumber === 1) {
-        // Message 结构
-        let length = 0;
-        let shift = 0;
-        while (offset < payload.length) {
-          const byte = payload[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-
-        const msgData = payload.subarray(offset, offset + length);
-        offset += length;
-
-        const parsed = this.parseInnerMessage(msgData);
-        if (parsed) {
-          messages.push(parsed);
-        }
-      } else if (wireType === 0) {
-        // Varint - skip
-        while (offset < payload.length) {
-          const byte = payload[offset];
-          offset++;
-          if ((byte & 0x80) === 0) break;
-        }
-      } else if (wireType === 2) {
-        // Length-delimited - skip
-        let length = 0;
-        let shift = 0;
-        while (offset < payload.length) {
-          const byte = payload[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        offset += length;
-      } else {
-        break;
-      }
-    }
-
-    return messages;
-  }
-
-  /**
-   * 解析内部 Message 结构
-   */
-  private parseInnerMessage(data: Buffer): ParsedMessage | null {
-    try {
-      let offset = 0;
-      let method = '';
-      let msgPayload: Buffer | null = null;
-
-      while (offset < data.length) {
-        const tagByte = data[offset];
-        const fieldNumber = tagByte >> 3;
-        const wireType = tagByte & 0x7;
-        offset++;
-
-        if (wireType === 2) {
-          let length = 0;
-          let shift = 0;
-          while (offset < data.length) {
-            const byte = data[offset];
-            offset++;
-            length |= (byte & 0x7f) << shift;
-            if ((byte & 0x80) === 0) break;
-            shift += 7;
-          }
-          const value = data.subarray(offset, offset + length);
-          offset += length;
-
-          if (fieldNumber === 1) {
-            // method (string)
-            method = value.toString('utf-8');
-          } else if (fieldNumber === 2) {
-            // payload (bytes)
-            msgPayload = value;
-          }
-        } else if (wireType === 0) {
-          while (offset < data.length) {
-            const byte = data[offset];
-            offset++;
-            if ((byte & 0x80) === 0) break;
-          }
-        } else {
-          break;
-        }
-      }
-
-      if (method && msgPayload) {
-        const parsedData = this.parseMessagePayload(method, msgPayload);
-        return { method, data: parsedData };
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * 解析具体消息的 payload
-   */
-  private parseMessagePayload(
-    method: string,
-    data: Buffer
-  ): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-
-    try {
-      switch (method) {
-        case MSG_METHODS.CHAT:
-          this.parseChatMessage(data, result);
-          break;
-        case MSG_METHODS.GIFT:
-          this.parseGiftMessage(data, result);
-          break;
-        case MSG_METHODS.MEMBER:
-          this.parseMemberMessage(data, result);
-          break;
-        case MSG_METHODS.LIKE:
-          this.parseLikeMessage(data, result);
-          break;
-        default:
-          break;
-      }
-    } catch {
-      // 解析失败
-    }
-
-    return result;
-  }
-
-  /**
-   * 解析弹幕消息
-   */
-  private parseChatMessage(
-    data: Buffer,
-    result: Record<string, unknown>
-  ): void {
-    let offset = 0;
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 2) {
-          // User 结构
-          const user = this.parseUser(value);
-          result.user = user;
-        } else if (fieldNumber === 3) {
-          // content
-          result.content = value.toString('utf-8');
-        }
-      } else if (wireType === 0) {
-        let value = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          value |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-      } else {
-        break;
-      }
-    }
-  }
-
-  /**
-   * 解析礼物消息
-   */
-  private parseGiftMessage(
-    data: Buffer,
-    result: Record<string, unknown>
-  ): void {
-    let offset = 0;
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 7) {
-          result.user = this.parseUser(value);
-        } else if (fieldNumber === 15) {
-          result.gift = this.parseGift(value);
-        }
-      } else if (wireType === 0) {
-        let value = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          value |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        if (fieldNumber === 6) result.comboCount = value;
-        if (fieldNumber === 8) result.repeatCount = value;
-      } else {
-        break;
-      }
-    }
-  }
-
-  /**
-   * 解析进场消息
-   */
-  private parseMemberMessage(
-    data: Buffer,
-    result: Record<string, unknown>
-  ): void {
-    let offset = 0;
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 2) {
-          result.user = this.parseUser(value);
-        }
-      } else if (wireType === 0) {
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          if ((byte & 0x80) === 0) break;
-        }
-      } else {
-        break;
-      }
-    }
-  }
-
-  /**
-   * 解析点赞消息
-   */
-  private parseLikeMessage(
-    data: Buffer,
-    result: Record<string, unknown>
-  ): void {
-    let offset = 0;
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 5) {
-          result.user = this.parseUser(value);
-        }
-      } else if (wireType === 0) {
-        let value = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          value |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        if (fieldNumber === 1) result.count = value;
-      } else {
-        break;
-      }
-    }
-  }
-
-  /**
-   * 解析 User 结构
-   */
-  private parseUser(data: Buffer): Record<string, unknown> {
-    const user: Record<string, unknown> = {};
-    let offset = 0;
-
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 0) {
-        let value = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          value |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        if (fieldNumber === 1) user.id = value;
-        if (fieldNumber === 3) user.gender = value;
-      } else if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 2 || fieldNumber === 4) {
-          // shortId or displayId
-          const str = value.toString('utf-8');
-          if (str) user[fieldNumber === 2 ? 'shortId' : 'displayId'] = str;
-        } else if (fieldNumber === 3) {
-          user.nickname = value.toString('utf-8');
-        } else if (fieldNumber === 9) {
-          // avatar_thumb
-          user.avatar = this.parseAvatarUrl(value);
-        }
-      } else {
-        break;
-      }
-    }
-
-    return user;
-  }
-
-  /**
-   * 解析头像 URL
-   */
-  private parseAvatarUrl(data: Buffer): string {
-    let offset = 0;
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 1) {
-          // url_list 的第一个
-          const url = value.toString('utf-8');
-          if (url) return url;
-        }
-      } else if (wireType === 0) {
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          if ((byte & 0x80) === 0) break;
-        }
-      } else {
-        break;
-      }
-    }
-    return '';
-  }
-
-  /**
-   * 解析 Gift 结构
-   */
-  private parseGift(data: Buffer): Record<string, unknown> {
-    const gift: Record<string, unknown> = {};
-    let offset = 0;
-
-    while (offset < data.length) {
-      const tagByte = data[offset];
-      const fieldNumber = tagByte >> 3;
-      const wireType = tagByte & 0x7;
-      offset++;
-
-      if (wireType === 0) {
-        let value = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          value |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        if (fieldNumber === 5) gift.diamondCount = value;
-      } else if (wireType === 2) {
-        let length = 0;
-        let shift = 0;
-        while (offset < data.length) {
-          const byte = data[offset];
-          offset++;
-          length |= (byte & 0x7f) << shift;
-          if ((byte & 0x80) === 0) break;
-          shift += 7;
-        }
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
-        if (fieldNumber === 1) gift.name = value.toString('utf-8');
-        if (fieldNumber === 2) gift.icon = this.parseAvatarUrl(value);
-      } else {
-        break;
-      }
-    }
-
-    return gift;
-  }
-
-  /**
-   * 处理解析后的消息
-   */
-  private processMessages(msg: ParsedMessage): void {
-    const { method, data } = msg;
-
-    switch (method) {
-      case MSG_METHODS.CHAT: {
-        const user = data.user as Record<string, unknown> | undefined;
-        this.emit('message', {
-          type: 'chat',
-          nickname: (user?.nickname as string) || '未知用户',
-          avatar: (user?.avatar as string) || '',
-          content: (data.content as string) || '',
-          timestamp: Date.now(),
-        });
-        break;
-      }
-      case MSG_METHODS.GIFT: {
-        const user = data.user as Record<string, unknown> | undefined;
-        const gift = data.gift as Record<string, unknown> | undefined;
-        this.emit('message', {
-          type: 'gift',
-          nickname: (user?.nickname as string) || '未知用户',
-          avatar: (user?.avatar as string) || '',
-          giftName: (gift?.name as string) || '礼物',
-          giftIcon: (gift?.icon as string) || '',
-          count: (data.repeatCount as number) || (data.comboCount as number) || 1,
-          diamondCount: (gift?.diamondCount as number) || 0,
-          combo: ((data.comboCount as number) || 0) > 1,
-          timestamp: Date.now(),
-        });
-        break;
-      }
-      case MSG_METHODS.MEMBER: {
-        const user = data.user as Record<string, unknown> | undefined;
-        this.emit('message', {
-          type: 'enter',
-          nickname: (user?.nickname as string) || '未知用户',
-          avatar: (user?.avatar as string) || '',
-          timestamp: Date.now(),
-        });
-        break;
-      }
-      case MSG_METHODS.LIKE: {
-        const user = data.user as Record<string, unknown> | undefined;
-        this.emit('message', {
-          type: 'like',
-          nickname: (user?.nickname as string) || '未知用户',
-          count: (data.count as number) || 1,
-          timestamp: Date.now(),
-        });
-        break;
-      }
-      default:
-        break;
-    }
-  }
-
-  /**
-   * 启动心跳
-   */
-  private startHeartbeat(): void {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      if (this.ws && this._isConnected) {
-        // 发送 ping 帧 (protobuf 编码的简单心跳)
-        const ping = Buffer.from([0x3a, 0x02, 0x68, 0x62]); // "hb" in protobuf
-        try {
-          this.ws.send(ping);
-        } catch {
-          // ignore
-        }
-      }
-    }, 10000);
-  }
-
-  /**
-   * 停止心跳
-   */
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
-  /**
-   * 尝试重连
-   */
-  private tryReconnect(): void {
-    if (this.reconnectCount >= this.maxReconnect) {
-      this.emit('status', 'error');
-      return;
-    }
-
-    this.reconnectCount++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectCount), 30000);
-
-    this.reconnectTimer = setTimeout(() => {
-      this.emit('reconnecting', this.reconnectCount);
-      this.connect();
-    }, delay);
   }
 
   /**
    * 断开连接
    */
   disconnect(): void {
+    if (this.client) {
+      this.client.removeAllListeners();
+      this.client = null;
+    }
     this._isConnected = false;
-    this.stopHeartbeat();
+  }
 
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-
-    this.maxReconnect = 0; // 阻止重连
-
-    if (this.ws) {
-      try {
-        this.ws.close(1000, 'client disconnect');
-      } catch {
-        // ignore
-      }
-      this.ws = null;
-    }
-
-    this.emit('status', 'disconnected');
+  /**
+   * 获取连接状态
+   */
+  get isConnected(): boolean {
+    return this._isConnected;
   }
 }
 
-// 全局连接管理器
+// ============================================================
+// 客户端管理
+// ============================================================
+
 const clients = new Map<string, DouyinWebSocketClient>();
 
 /**
  * 获取或创建 WebSocket 客户端
  */
-export function getOrCreateClient(
+export function getOrCreateDouyinWSClient(
   roomId: string,
-  cookie: string = ''
+  cookie = ''
 ): DouyinWebSocketClient {
-  const existing = clients.get(roomId);
-  if (existing && existing.isConnected) {
-    return existing;
+  let client = clients.get(roomId);
+  if (!client) {
+    client = new DouyinWebSocketClient(roomId, cookie);
+    clients.set(roomId, client);
   }
-
-  const client = new DouyinWebSocketClient(roomId, cookie);
-  clients.set(roomId, client);
   return client;
 }
 
 /**
- * 移除客户端
+ * 移除 WebSocket 客户端
  */
-export function removeClient(roomId: string): void {
+export function removeDouyinWSClient(roomId: string): void {
   const client = clients.get(roomId);
   if (client) {
     client.disconnect();
@@ -994,15 +336,10 @@ export function removeClient(roomId: string): void {
 }
 
 /**
- * 获取所有客户端状态
+ * 获取所有客户端
  */
-export function getAllClientStatus(): Record<
-  string,
-  { connected: boolean }
-> {
-  const status: Record<string, { connected: boolean }> = {};
-  for (const [roomId, client] of clients) {
-    status[roomId] = { connected: client.isConnected };
-  }
-  return status;
+export function getAllDouyinWSClients(): Map<string, DouyinWebSocketClient> {
+  return clients;
 }
+
+export default DouyinWebSocketClient;
