@@ -16,6 +16,26 @@ import * as https from 'https';
 import * as http from 'http';
 import { createWriteStream } from 'fs';
 
+/**
+ * 可靠检测是否为 Windows 环境
+ * 某些情况下 process.platform 可能返回错误值（如 WSL/Docker）
+ * 通过检查 Windows 特征路径和环境变量来判断
+ */
+function isWindowsEnvironment(): boolean {
+  if (process.platform === 'win32') return true;
+  
+  // 检查 Windows 特征路径
+  if (fs.existsSync('C:\\Windows') || fs.existsSync('C:\\Windows\\System32')) return true;
+  
+  // 检查 Windows 特征环境变量
+  if (process.env.APPDATA && process.env.COMSPEC) return true;
+  
+  // 检查工作目录是否为 Windows 驱动器路径
+  if (/^[A-Z]:\\/i.test(process.cwd())) return true;
+  
+  return false;
+}
+
 // 依赖状态枚举
 export const DepStatus = {
   INSTALLED: 'installed',
@@ -142,7 +162,7 @@ export function saveCustomFFmpegPath(customPath: string): boolean {
     }
     
     // 验证是否是有效的 ffmpeg
-    const ext = process.platform === 'win32' ? '.exe' : '';
+    const ext = isWindowsEnvironment() ? '.exe' : '';
     const ffmpegFile = path.basename(customPath);
     if (ffmpegFile !== `ffmpeg${ext}` && ffmpegFile !== 'ffmpeg') {
       // 如果指向的是目录，检查目录下是否有 ffmpeg
@@ -188,7 +208,7 @@ export function getFFmpegPath(): string {
     const stat = fs.statSync(customPath);
     if (stat.isFile()) return customPath;
     if (stat.isDirectory()) {
-      const ext = process.platform === 'win32' ? '.exe' : '';
+      const ext = isWindowsEnvironment() ? '.exe' : '';
       const ffmpegInDir = path.join(customPath, `ffmpeg${ext}`);
       if (fs.existsSync(ffmpegInDir)) return ffmpegInDir;
     }
@@ -196,7 +216,7 @@ export function getFFmpegPath(): string {
 
   // 2. 检查 .deps 目录
   const depsDir = getDepsDir();
-  const ext = process.platform === 'win32' ? '.exe' : '';
+  const ext = isWindowsEnvironment() ? '.exe' : '';
   return path.join(depsDir, `ffmpeg${ext}`);
 }
 
@@ -236,45 +256,58 @@ function validateFFmpeg(exePath: string): string | null {
  * 从环境变量或常见路径查找 FFmpeg
  */
 function findSystemFFmpeg(): string | null {
+  const isWindows = isWindowsEnvironment();
+  console.log(`[findSystemFFmpeg] isWindows: ${isWindows}, process.platform: ${process.platform}`);
+  
   // 1. 检查环境变量 (由 start.bat 设置)
   const envPath = process.env.DYREC_FFMPEG_PATH;
   if (envPath) {
+    console.log(`[findSystemFFmpeg] DYREC_FFMPEG_PATH: ${envPath}`);
     try {
       const stat = fs.statSync(envPath);
       if (stat.isFile()) {
-        const ext = process.platform === 'win32' ? '.exe' : '';
+        const ext = isWindows ? '.exe' : '';
         if (envPath.endsWith(`ffmpeg${ext}`) || envPath.endsWith('ffmpeg')) {
+          console.log(`[findSystemFFmpeg] Found via env (file): ${envPath}`);
           return envPath;
         }
       }
       if (stat.isDirectory()) {
-        const ext = process.platform === 'win32' ? '.exe' : '';
+        const ext = isWindows ? '.exe' : '';
         const ffmpegInDir = path.join(envPath, `ffmpeg${ext}`);
-        if (fs.existsSync(ffmpegInDir)) return ffmpegInDir;
+        if (fs.existsSync(ffmpegInDir)) {
+          console.log(`[findSystemFFmpeg] Found via env (dir): ${ffmpegInDir}`);
+          return ffmpegInDir;
+        }
       }
     } catch { /* ignore */ }
   }
 
   // 2. Windows: 检查常见安装路径
-  if (process.platform === 'win32') {
+  if (isWindows) {
     const commonPaths = [
       'C:\\ffmpeg\\bin',
       'C:\\Program Files\\ffmpeg\\bin',
       'C:\\Program Files (x86)\\ffmpeg\\bin',
       path.join(process.env.LOCALAPPDATA || '', 'ffmpeg', 'bin'),
       path.join(process.env.USERPROFILE || '', 'ffmpeg', 'bin'),
+      path.join(process.env.ProgramFiles || 'C:\\Program Files', 'ffmpeg', 'bin'),
     ];
     
+    console.log(`[findSystemFFmpeg] Scanning ${commonPaths.length} common Windows paths...`);
     for (const dir of commonPaths) {
+      if (!dir || dir.includes('undefined')) continue;
       const ffmpegExe = path.join(dir, 'ffmpeg.exe');
-      if (fs.existsSync(ffmpegExe)) return ffmpegExe;
+      if (fs.existsSync(ffmpegExe)) {
+        console.log(`[findSystemFFmpeg] Found in common path: ${ffmpegExe}`);
+        return ffmpegExe;
+      }
     }
   }
 
   // 3. 检查系统 PATH (通过 where/which 命令)
   try {
-    const { execSync } = require('child_process');
-    const cmd = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
+    const cmd = isWindows ? 'where ffmpeg' : 'which ffmpeg';
     console.log(`[findSystemFFmpeg] Running: ${cmd}`);
     const result = execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
     console.log(`[findSystemFFmpeg] Result: ${result || 'empty'}`);
@@ -282,7 +315,7 @@ function findSystemFFmpeg(): string | null {
       // where 命令可能返回多行，取第一行
       const firstPath = result.split(/[\r\n]+/)[0].trim();
       if (firstPath && fs.existsSync(firstPath)) {
-        console.log(`[findSystemFFmpeg] Found: ${firstPath}`);
+        console.log(`[findSystemFFmpeg] Found via PATH: ${firstPath}`);
         return firstPath;
       }
     }
@@ -291,6 +324,7 @@ function findSystemFFmpeg(): string | null {
     console.log(`[findSystemFFmpeg] Error: ${e instanceof Error ? e.message : 'unknown'}`);
   }
 
+  console.log(`[findSystemFFmpeg] FFmpeg not found`);
   return null;
 }
 
@@ -309,7 +343,7 @@ export function checkFFmpeg(): DepResult {
     try {
       const stat = fs.statSync(customPath);
       if (stat.isDirectory()) {
-        const ext = process.platform === 'win32' ? '.exe' : '';
+        const ext = isWindowsEnvironment() ? '.exe' : '';
         customExePath = path.join(customPath, `ffmpeg${ext}`);
       }
     } catch { /* ignore */ }
@@ -346,7 +380,7 @@ export function checkFFmpeg(): DepResult {
   }
 
   // 3. 检查 .deps 目录下的 ffmpeg
-  const bundledPath = path.join(getDepsDir(), process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  const bundledPath = path.join(getDepsDir(), isWindowsEnvironment() ? 'ffmpeg.exe' : 'ffmpeg');
   if (fs.existsSync(bundledPath)) {
     const version = validateFFmpeg(bundledPath);
     if (version) {
@@ -677,7 +711,7 @@ async function extractArchive(archivePath: string, destDir: string, format: 'zip
   }
 
   if (format === 'zip') {
-    if (process.platform === 'win32') {
+    if (isWindowsEnvironment()) {
       await extractZipPowerShell(archivePath, destDir);
     } else {
       try {
@@ -696,11 +730,15 @@ async function extractArchive(archivePath: string, destDir: string, format: 'zip
  * 自动安装 FFmpeg
  */
 export async function installFFmpeg(onProgress?: (info: ProgressInfo) => void): Promise<string> {
-  const platform = process.platform;
+  // 使用可靠的平台检测
+  const platform = isWindowsEnvironment() ? 'win32' : process.platform;
   const arch = process.arch;
   const depsDir = getDepsDir();
 
-  console.log(`[DepInstaller] Platform: ${platform}, Arch: ${arch}`);
+  console.log(`[DepInstaller] process.platform: ${process.platform}, Detected: ${platform}, Arch: ${arch}`);
+  console.log(`[DepInstaller] CWD: ${process.cwd()}`);
+  console.log(`[DepInstaller] APPDATA: ${process.env.APPDATA || 'not set'}`);
+  console.log(`[DepInstaller] COMSPEC: ${process.env.COMSPEC || 'not set'}`);
   console.log(`[DepInstaller] DepsDir: ${depsDir}`);
 
   if (onProgress) onProgress({ stage: 'downloading', percent: 0, message: '准备下载 FFmpeg...' });
