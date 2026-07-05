@@ -167,3 +167,9 @@ Desktop.ini
 # Misc
 .coze-logs
 .codegraph/
+
+# Large files
+.deps/
+public/ziUTrJZh
+next-build/
+dist-portable/DyRec/next-build/
