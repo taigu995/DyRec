@@ -93,7 +93,10 @@ export class DouyinWebSocketClient extends EventEmitter {
 
       this.ws.on('error', (err: Error) => {
         console.error('[DouyinWS] WebSocket error:', err.message);
-        this.emit('error', err.message);
+        // 安全地发射错误事件，避免无监听器时崩溃
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', err.message);
+        }
         this._isConnected = false;
         this.stopHeartbeat();
       });
@@ -101,14 +104,20 @@ export class DouyinWebSocketClient extends EventEmitter {
       // 处理未捕获的错误
       this.ws.on('unexpected-response', (req: unknown, res: { statusCode: number }) => {
         console.error('[DouyinWS] Unexpected response:', res.statusCode);
-        this.emit('error', `Unexpected server response: ${res.statusCode}`);
+        // 安全地发射错误事件，避免无监听器时崩溃
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', `Unexpected server response: ${res.statusCode}`);
+        }
         this._isConnected = false;
         this.stopHeartbeat();
         this.tryReconnect();
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '未知错误';
-      this.emit('error', `连接失败: ${msg}`);
+      // 安全地发射错误事件，避免无监听器时崩溃
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', `连接失败: ${msg}`);
+      }
       this.tryReconnect();
     }
   }

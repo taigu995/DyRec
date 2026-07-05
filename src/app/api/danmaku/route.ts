@@ -74,6 +74,22 @@ export async function GET(request: NextRequest) {
 
       client.on('message', onMessage);
       client.on('status', onStatus);
+      
+      // 监听错误事件，防止未捕获异常导致服务器崩溃
+      const onError = (err: string) => {
+        if (clientClosed) return;
+        console.error('[Danmaku SSE] Client error:', err);
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: 'error', message: err })}\n\n`
+            )
+          );
+        } catch {
+          // ignore
+        }
+      };
+      client.on('error', onError);
 
       // 连接 WebSocket
       client.connect().catch(() => {
@@ -106,6 +122,7 @@ export async function GET(request: NextRequest) {
         clearInterval(heartbeat);
         client.off('message', onMessage);
         client.off('status', onStatus);
+        client.off('error', onError);
         // 如果没有其他监听器，断开连接
         if (client.listenerCount('message') === 0) {
           removeClient(roomId);
