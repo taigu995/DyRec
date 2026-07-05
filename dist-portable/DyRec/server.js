@@ -10,14 +10,13 @@ console.log('[Server] Port:', port)
 
 const app = next({ dev, dir: __dirname })
 
+const handle = app.getRequestHandler()
+
 app.prepare().then(() => {
   console.log('[Server] Next.js prepared successfully')
   
-  const handle = app.getRequestHandler()
-  
   const server = createServer((req, res) => {
-    const parsedUrl = new URL(req.url, `http://localhost:${port}`)
-    handle(req, res, parsedUrl)
+    handle(req, res)
   })
   
   server.on('error', (err) => {
