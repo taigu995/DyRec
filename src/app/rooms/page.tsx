@@ -226,7 +226,16 @@ export default function RoomsPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || '录制启动失败');
+        // 如果是合成录制模式，提示用户去预览页面
+        if (data.error && data.error.includes('合成录制')) {
+          if (confirm('合成录制需要在预览页面进行，是否立即跳转？')) {
+            window.open(`/live/${roomId}`, '_blank');
+          }
+        } else {
+          alert(data.error || '录制启动失败');
+        }
+      } else {
+        alert('录制已开始');
       }
     } catch (err) {
       console.error('录制失败:', err);
@@ -268,7 +277,11 @@ export default function RoomsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setRooms(data.data);
+        // PUT returns a single room, merge it into the rooms array
+        const updatedRoom = data.data;
+        setRooms((prev) =>
+          prev.map((r) => (r.roomId === updatedRoom.roomId ? { ...r, ...updatedRoom } : r))
+        );
         setEditDialogOpen(false);
         setEditRoom(null);
       } else {

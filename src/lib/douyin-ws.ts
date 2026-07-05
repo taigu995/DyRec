@@ -55,6 +55,11 @@ export class DouyinWebSocketClient extends EventEmitter {
     if (this._isConnected) return;
 
     try {
+      // 如果没有 cookie，自动生成 ttwid
+      if (!this.cookie) {
+        this.cookie = await this.generateTtwid();
+      }
+
       // 先获取内部 room_id
       await this.fetchInternalRoomId();
 
@@ -66,7 +71,7 @@ export class DouyinWebSocketClient extends EventEmitter {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Cookie: this.cookie || '',
+          Cookie: this.cookie,
           Referer: 'https://live.douyin.com/',
         },
         handshakeTimeout: 10000,
@@ -123,6 +128,51 @@ export class DouyinWebSocketClient extends EventEmitter {
   }
 
   /**
+   * 获取 ttwid cookie
+   * 通过访问抖音直播首页自动获取，不需要用户登录
+   */
+  private async generateTtwid(): Promise<string> {
+    try {
+      const response = await fetch('https://live.douyin.com/', {
+        method: 'GET',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        redirect: 'follow',
+      });
+
+      // 从 Set-Cookie 头中提取 ttwid
+      const setCookie = response.headers.get('set-cookie');
+      if (setCookie) {
+        const match = setCookie.match(/ttwid=([^;]+)/);
+        if (match) {
+          return `ttwid=${match[1]}`;
+        }
+      }
+
+      // 尝试从 response.headers.getSetCookie() 获取（Node.js 18+）
+      try {
+        const cookies = (response.headers as any).getSetCookie?.() as string[] | undefined;
+        if (cookies) {
+          for (const c of cookies) {
+            const match = c.match(/ttwid=([^;]+)/);
+            if (match) {
+              return `ttwid=${match[1]}`;
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.error('[DouyinWS] Failed to get ttwid:', err);
+    }
+    return '';
+  }
+
+  /**
    * 获取内部 room_id (用于 WebSocket 连接)
    */
   private async fetchInternalRoomId(): Promise<void> {
@@ -146,7 +196,7 @@ export class DouyinWebSocketClient extends EventEmitter {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            Cookie: this.cookie || '',
+            Cookie: this.cookie,
             Referer: 'https://live.douyin.com/',
           },
           signal: AbortSignal.timeout(10000),
